@@ -1,0 +1,38 @@
+# Render Blueprint —— 放在仓库根目录，Render 会照着它一键创建服务。
+#
+# 文件格式依据（已核对，非凭记忆）：
+#   * 根键 `services`、`- type: web`、`runtime: python|static`、`plan: free`、
+#     `healthCheckPath` —— 取自 Render 官方在用的 blueprint 仓库
+#     https://github.com/electric-sql/render-blueprint/blob/main/render.yaml
+#     https://github.com/spree/spree_starter/blob/main/render.yaml
+#   * 区域名 oregon / ohio / virginia / frankfurt / singapore —— render.com/docs/regions
+#
+# ⚠️ 服务名 name 直接决定你的域名（<name>.onrender.com），创建后不好改，先想清楚再按 Apply。
+# ⚠️ 想只留静态站？把下面第 2 段（从 "# --- 第 2 段" 到文件末尾）整段删掉即可。
+
+services:
+  # ============================================================
+  # 第 1 段：静态站 —— 「永久域名」最省事的路
+  #   免费、走全球 CDN、不消耗实例小时、永不休眠、无冷启动。
+  #   没有 buildCommand 是故意的：public/ 里的文件直接发布，构建环节不会失败。
+  # ============================================================
+  - type: web
+    name: haitun-site                 # ← 改这里 = 改成你的域名前缀
+    runtime: static
+    staticPublishPath: ./public
+    autoDeploy: true
+    # 静态站不需要写 plan（写了反而可能校验不过）
+
+  # ============================================================
+  # 第 2 段：最小 Web Service —— 需要后端 / 动态接口时才要
+  #   纯标准库，没有 pip 依赖 → 构建不会失败。
+  #   ⚠️ 免费实例 15 分钟没流量会休眠，冷启动约 1 分钟；域名不会失效。
+  # ============================================================
+  - type: web
+    name: haitun-api                  # ← 这就是 https://haitun-api.onrender.com
+    runtime: python
+    plan: free
+    region: singapore                 # 离国内最近；若 Blueprint 报区域无效，删掉这一行走默认 oregon
+    startCommand: python server.py
+    healthCheckPath: /healthz
+    autoDeploy: true
