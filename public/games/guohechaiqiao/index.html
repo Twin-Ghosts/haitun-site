@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>过河拆桥 · 单机 / 联机</title>
-<meta name="description" content="过河拆桥：星形地图、暗选行动、拆桥断退路的策略博弈游戏。可单机打电脑，也可用房号和真人在线同局。">
+<title>过河拆桥 · 联机</title>
+<meta name="description" content="过河拆桥：星形地图、暗选行动、拆桥断退路的策略博弈游戏。用房号把朋友拉进同一局，位置保密、行动同选。">
 <style>
   :root{--bg:#0f1226;--card:#171b34;--line:#2a2f52;--fg:#e8ebff;--muted:#9aa0c8;--accent:#7c8cff;--hot:#ff6b8a;--ok:#35d07f;--gold:#ffd27a;}
   *{box-sizing:border-box;}
@@ -52,9 +52,6 @@
   .tag.s{background:#2a2440;color:var(--gold);}
   .festival{font-size:12px;color:var(--muted);text-align:center;margin-top:18px;line-height:1.9;}
   /* 联机层 */
-  .tabs{display:flex;gap:8px;margin-bottom:14px;}
-  .tabs button.tab{background:#1a1e3a;border:1px solid var(--line);color:var(--muted);font-weight:600;}
-  .tabs button.tab.on{background:var(--accent);color:#fff;border-color:var(--accent);}
   .netbar{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted);
           background:#141833;border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:12px;}
   .netbar b{color:var(--fg);}
@@ -82,38 +79,7 @@
 
   <!-- ============ 开局设置 ============ -->
   <div id="setup" class="card">
-    <div class="tabs">
-      <button id="tabSolo" class="tab on">单机（打电脑）</button>
-      <button id="tabNet" class="tab">联机（和朋友）</button>
-    </div>
-    <div id="soloBox">
-    <h3>开始新对局</h3>
-    <div class="row">
-      <label for="nameInput">昵称</label>
-      <input id="nameInput" placeholder="输入你的昵称" maxlength="12" value="玩家" style="flex:1;min-width:140px">
-    </div>
-    <div class="row">
-      <label for="numPlayers">人数</label>
-      <select id="numPlayers">
-        <option value="3">3 人（快局）</option>
-        <option value="4">4 人</option>
-        <option value="5">5 人</option>
-        <option value="6" selected>6 人（推荐）</option>
-        <option value="7">7 人</option>
-        <option value="8">8 人（标准局）</option>
-      </select>
-      <label for="difficulty">AI 难度</label>
-      <select id="difficulty">
-        <option value="easy">简单</option>
-        <option value="normal" selected>普通</option>
-        <option value="hard">困难</option>
-      </select>
-    </div>
-    <div class="row">
-      <button id="startBtn">开始对局</button>
-      <span class="hintbar" style="margin:0">位置随机分配，先手序 = 座次号（公开）。</span>
-    </div>
-    </div><!-- /soloBox -->
+    <h3>联机对局</h3>
     <details style="margin-top:10px">
       <summary>📖 规则速览 / 怎么玩</summary>
       <div class="rules" style="margin-top:10px">
@@ -142,8 +108,7 @@
     </details>
 
     <!-- ============ 联机 ============ -->
-    <div id="onlineBox" class="hidden">
-      <h3>联机对局（无自有服务器）</h3>
+    <div id="onlineBox">
       <div class="row">
         <label for="netName">昵称</label>
         <input id="netName" maxlength="12" value="玩家" style="flex:1;min-width:120px">
@@ -154,6 +119,7 @@
         <input id="netRoom" maxlength="4" placeholder="4 位" style="width:100px;text-transform:uppercase;letter-spacing:3px">
         <button id="joinRoomBtn">加入房间</button>
         <button id="createRoomBtn" class="ghost">创建新房间</button>
+        <span class="hintbar" style="margin:0">没有房号就点「创建新房间」，把邀请链接发给朋友</span>
       </div>
 
       <div id="netPanel" class="hidden">
@@ -170,21 +136,16 @@
         <div class="plist" id="lobbyList"></div>
         <div class="row">
           <button id="readyBtn" class="ghost">我准备好了</button>
-          <button id="addBotBtn" class="ghost hidden">+ 加电脑</button>
-          <button id="dropBotBtn" class="ghost hidden">− 去电脑</button>
-          <select id="netDiff" class="hidden">
-            <option value="easy">电脑：简单</option>
-            <option value="normal" selected>电脑：普通</option>
-            <option value="hard">电脑：困难</option>
-          </select>
           <button id="startNetBtn" class="hidden">开始对局</button>
           <button id="leaveBtn" class="ghost">离开房间</button>
         </div>
         <div class="log" id="chatList" style="height:110px"></div>
         <div class="row"><input id="chatInputLobby" maxlength="90" placeholder="说点什么…" style="flex:1"><button id="chatSendLobby">发送</button></div>
         <div class="hintbar" style="margin-bottom:0">
-          房号就是全部凭据：把邀请链接发给朋友即可同局。<b>房主关掉页面，对局会暂停</b>；
-          消息经公共 MQTT 中继（broker.emqx.io）转发，勿在公开场合贴房号。
+          <b>至少 3 名真人</b>才能开局。房号就是全部凭据：把邀请链接发给朋友即可同局。<br>
+          房主＝当前负责结算的那台浏览器；<b>房主关掉页面或断网后，房间内其他浏览器会自动接管，对局继续</b>，
+          不依赖任何一台特定的机器。消息经公共 MQTT 中继（broker.emqx.io）转发，不经过本站服务器；
+          位置保密只挡界面，别在公开场合贴房号，也别用它做赌注。
         </div>
       </div>
     </div>
@@ -216,7 +177,6 @@
           </div>
           <div class="row">
             <button id="submitBtn" disabled>提交行动</button>
-            <button id="spectateBtn" class="ghost hidden">快进到结束 ▶</button>
           </div>
         </div>
         <div class="card">
@@ -244,7 +204,8 @@
     </div>
   </div>
 
-  <div class="festival">单机模式不请求任何外部接口；联机模式只经公共 MQTT 中继（broker.emqx.io）转发房间消息，不经过任何自有服务器。</div>
+  <div class="festival">本页是纯静态文件，运行在你的浏览器里；对局消息只经公共 MQTT 中继（broker.emqx.io）转发，不经过任何自有服务器。<br>
+    「房主」由房间内的浏览器自动产生，谁掉线就由其他人接管——房间不绑定任何一台特定的机器。</div>
 </div>
 
 <script>
@@ -567,260 +528,16 @@ class Game {
 }
 
 /* =====================================================================
-   二、电脑对手：纯本地规则推理（位置信念追踪 + 启发式决策）
-   —— 不联网、不调用任何模型，全部逻辑就在下面这段代码里。
-   ===================================================================== */
-const BOT_NAMES = ["桥影", "渡鸦", "沉舟", "白鹭", "孤帆", "寒江", "暮雪", "远舟"];
-
-class Bot {
-  constructor(pid, difficulty) {
-    this.pid = pid; this.diff = difficulty;
-    this.belief = new Map();     // 对手 pid -> 可能所在地集合
-  }
-  init(game) {
-    const mine = game.players.get(this.pid).pos;
-    for (const p of game.players.values()) {
-      if (p.pid === this.pid) continue;
-      // 开局一人一基地：对手只可能在其他基地上
-      this.belief.set(p.pid, new Set(game.locations.filter(l => l !== mine && l !== CENTER)));
-    }
-  }
-  /* 用公开信息更新信念。preBridges = 本轮开始前的桥况快照 */
-  observe(game, exposedMap, preBridges) {
-    const preNb = loc => {
-      const res = [];
-      for (const [k, d] of preBridges) {
-        if (d <= 0) continue;
-        const parts = k.split("-").map(Number);
-        if (parts[0] === loc) res.push(parts[1]);
-        else if (parts[1] === loc) res.push(parts[0]);
-      }
-      return res;
-    };
-    for (const p of game.players.values()) {
-      if (p.pid === this.pid) continue;
-      if (!p.alive) { this.belief.delete(p.pid); continue; }
-      if (exposedMap.has(p.pid)) { this.belief.set(p.pid, new Set([exposedMap.get(p.pid)])); continue; }
-      const cur = this.belief.get(p.pid) || new Set();
-      const next = new Set(cur);
-      cur.forEach(c => preNb(c).forEach(n => next.add(n)));
-      this.belief.set(p.pid, next);
-    }
-  }
-  /* 雷达结果用于收窄信念 */
-  useRadar(loc, count, game) {
-    if (count === 0) {
-      for (const [pid, s] of this.belief) { s.delete(loc); }
-      return;
-    }
-    let holders = [];
-    for (const [pid, s] of this.belief) if (s.has(loc)) holders.push([pid, s]);
-    if (count === 1 && holders.length >= 1) {
-      // 无法确定是谁，但可以删掉其它候选：对每个 holder 保留 loc 是"可能"的
-      // 保守做法：对所有人，如果其候选集只包含 loc 与其它不可能地点，收窄为 loc 的概率上升
-      // 简化：若某人的候选集大小>1，保留；否则不动
-    }
-    if (holders.length === count) {
-      // 恰好这些人都可能在那里 -> 不能排除，但可排除其他人
-    }
-  }
-
-  decide(game) {
-    const me = game.players.get(this.pid);
-    if (!me || !me.alive || game.finished) return { action: { type: "stay" }, radar: null };
-    const la = game.legalActions(this.pid);
-    const R = () => Math.random();
-    const noise = this.diff === "easy" ? 0.45 : this.diff === "normal" ? 0.2 : 0.05;
-    const conf = this.diff === "easy" ? 1 : this.diff === "normal" ? 2 : 3;
-
-    // 雷达选择：在 C 时探测信念最集中的基地
-    let radar = null;
-    if (la.canRadar) {
-      let bestLoc = null, bestScore = -1;
-      for (const b of la.radarTargets) {
-        let sc = 0;
-        for (const [, s] of this.belief) if (s.has(b)) sc += 1 / s.size;
-        if (sc > bestScore) { bestScore = sc; bestLoc = b; }
-      }
-      if (bestLoc !== null) radar = bestLoc;
-    }
-
-    // 保命优先：所在地已无任何桥（会在结算时孤立死）-> 必须建桥
-    if (game.neighbors(me.pos).length === 0) {
-      if (la.canBuild && la.buildTargets.length) return { action: { type: "build", target: pick(la.buildTargets) }, radar };
-      if (la.moveTargets.length) return { action: { type: "move", target: pick(la.moveTargets) }, radar };
-    }
-
-    // 1) 高置信度猜杀
-    if (la.guessTargets.length && R() > noise) {
-      let cand = null;
-      for (const t of la.guessTargets) {
-        const s = this.belief.get(t);
-        if (!s || s.size === 0) continue;
-        if (s.size <= conf) {
-          for (const loc of s) {
-            if (la.guessLocs.indexOf(loc) >= 0) { cand = { target: t, loc }; break; }
-          }
-        }
-        if (cand) break;
-      }
-      // 只在"几乎确定"时才开枪，避免自杀
-      if (cand) {
-        const s = this.belief.get(cand.target);
-        const certainty = 1 / s.size;
-        const need = this.diff === "easy" ? 0.95 : this.diff === "normal" ? 0.5 : 0.34;
-        if (certainty >= need) return { action: { type: "guess", target: cand.target, loc: cand.loc }, radar };
-      }
-    }
-
-    // 2) 拆桥断退路（本游戏核心杀招）
-    if (la.canDemolish && R() > noise) {
-      // 2a) 我在中心岛：拆掉「我怀疑有人在的基地」唯一的那座桥 -> 对方孤立死/坠桥
-      if (me.pos === CENTER) {
-        let best = null, bestSc = 0;
-        for (const b of la.demolishTargets) {
-          if (game.dur(CENTER, b) <= 0) continue;
-          let sc = 0;
-          for (const [, s] of this.belief) if (s.has(b)) sc += 1 / s.size;
-          // 该基地是否只剩这一座桥（拆了就孤立）
-          const others = game.neighbors(b).filter(n => n !== CENTER);
-          const bonus = others.length === 0 ? 2.0 : 1.0;
-          sc *= bonus;
-          if (sc > bestSc) { bestSc = sc; best = b; }
-        }
-        if (best !== null && bestSc >= (this.diff === "hard" ? 0.4 : 0.8))
-          return { action: { type: "demolish", target: best }, radar };
-      }
-      // 2b) 我在基地：拆掉「通往我怀疑有人在的地点」的桥
-      let best = null, bestSc = 0;
-      for (const l of la.demolishTargets) {
-        if (game.dur(me.pos, l) <= 0) continue;
-        let sc = 0;
-        for (const [, s] of this.belief) if (s.has(l)) sc += 1 / s.size;
-        if (sc > bestSc) { bestSc = sc; best = l; }
-      }
-      if (best !== null && bestSc >= (this.diff === "hard" ? 0.6 : 1.1))
-        return { action: { type: "demolish", target: best }, radar };
-    }
-
-    // 3) 移动：优先抢中心岛（在 C 能拆任意基地的桥、还能用雷达）
-    if (la.moveTargets.length) {
-      const dangerBridge = la.moveTargets.map(t => game.dur(me.pos, t));
-      const toCenter = la.moveTargets.indexOf(CENTER) >= 0;
-      const risky = me.seat > 0 && dangerBridge.some(d => d <= 1);
-      if (toCenter && R() > noise * 0.5)
-        return { action: { type: "move", target: CENTER }, radar };
-      // 待在自己基地、且桥快塌 -> 撤
-      const myBridges = game.neighbors(me.pos);
-      if (me.pos !== CENTER && myBridges.length && !risky && R() > 0.35)
-        return { action: { type: "move", target: pick(la.moveTargets) }, radar };
-    }
-
-    // 4) 建桥：扩张 / 备用退路
-    if (la.canBuild && la.buildTargets.length && R() > 0.45)
-      return { action: { type: "build", target: pick(la.buildTargets) }, radar };
-
-    // 5) 不动（只在安全时）
-    if (me.stayStreak === 0 && R() > 0.4) return { action: { type: "stay" }, radar };
-
-    // 6) 兜底：找一个合法行动，绝不因无从选择而白送
-    if (la.canBuild && la.buildTargets.length) return { action: { type: "build", target: pick(la.buildTargets) }, radar };
-    if (la.moveTargets.length) return { action: { type: "move", target: pick(la.moveTargets) }, radar };
-    if (la.canDemolish && la.demolishTargets.length) return { action: { type: "demolish", target: pick(la.demolishTargets) }, radar };
-    return { action: { type: "stay" }, radar };
-  }
-}
-function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
-/* =====================================================================
    三、界面
    ===================================================================== */
 const $ = id => document.getElementById(id);
-let game = null, bots = new Map(), myPid = 0, sel = { type: null, target: null, loc: null, guessTarget: null, radar: null };
+let game = null, myPid = 0, sel = { type: null, target: null, loc: null, guessTarget: null, radar: null };
 let publicKnown = new Map();   // 公开可确认的位置（暴露 / 死亡地点）
 let logLines = [];
 
 const L = { build: "建桥", move: "移动", demolish: "拆桥", guess: "猜杀", stay: "不动" };
 const REASON = { fall: "坠桥", guess: "被猜杀", miss: "猜错自杀", isolated: "孤立死", split: "分割全灭", idle: "力竭" };
 const locName = id => (id === CENTER ? "C" : "B" + id);
-
-function startGame() {
-  const n = parseInt($("numPlayers").value, 10);
-  const diff = $("difficulty").value;
-  const myName = ($("nameInput").value.trim() || "玩家").slice(0, 12);
-
-  // 先手序 = 座次：玩家随机插入某一席
-  const mySeat = Math.floor(Math.random() * n);
-  const infos = [];
-  let botIdx = 0, nextPid = 1;
-  for (let seat = 0; seat < n; seat++) {
-    if (seat === mySeat) infos.push([0, myName]);
-    else infos.push([nextPid++, BOT_NAMES[botIdx++ % BOT_NAMES.length]]);
-  }
-  myPid = 0;
-  game = new Game(infos);
-  bots = new Map();
-  publicKnown = new Map();
-  logLines = [];
-  $("logBox").innerHTML = "";
-  for (const p of game.players.values()) {
-    if (p.pid === myPid) continue;
-    const b = new Bot(p.pid, diff);
-    b.init(game);
-    bots.set(p.pid, b);
-  }
-  addLog(`对局开始：${n} 人。先手序 ${infos.map(i => i[1]).join(" → ")}（你的座次 P${mySeat + 1}）。`);
-  addLog("所有人起始各占一个基地，位置保密。");
-  $("setup").classList.add("hidden");
-  $("game").classList.remove("hidden");
-  render();
-}
-
-/* 一轮推进：玩家行动 + 所有电脑同时决定 -> 统一结算 */
-function playRound(myAction, myRadar) {
-  const actions = {}, radars = {};
-  actions[myPid] = myAction;
-  if (myRadar !== null && myRadar !== undefined) radars[myPid] = myRadar;
-
-  const preBridges = new Map(game.bridges);
-  for (const [pid, bot] of bots) {
-    const d = bot.decide(game);
-    actions[pid] = d.action;
-    if (d.radar !== null && d.radar !== undefined) radars[pid] = d.radar;
-  }
-
-  const lines = game.resolve(actions, radars);
-  // 公开信息 -> 玩家自己的已知位置表
-  for (const [pid, loc] of game.lastExposed) publicKnown.set(pid, { loc, round: game.round });
-  for (const d of game.lastDeaths) {
-    const p = game.players.get(d.pid);
-    if (p && p.pos !== null) publicKnown.set(d.pid, { loc: p.pos, round: game.round, dead: true });
-  }
-  // 电脑们更新信念
-  for (const [, bot] of bots) {
-    bot.observe(game, game.lastExposed, preBridges);
-    for (const [pid, res] of game.lastRadar) if (pid === bot.pid) bot.useRadar(res.loc, res.count, game);
-  }
-  // 雷达结果展示
-  const rr = game.lastRadar.get(myPid);
-  $("radarResult").textContent = rr ? `📡 上一轮雷达：${locName(rr.loc)} 有 ${rr.count} 人` : "";
-
-  lines.forEach(l => addLog(l));
-  render();
-}
-
-function addLog(text) {
-  logLines.push(text);
-  if (logLines.length > 400) logLines = logLines.slice(-400);
-  const box = $("logBox");
-  [...box.children].forEach(c => c.classList.remove("fresh"));
-  const div = document.createElement("div");
-  div.textContent = text;
-  div.className = "fresh" + (/游戏结束/.test(text) ? " big" : "");
-  box.appendChild(div);
-  while (box.children.length > 400) box.removeChild(box.firstChild);
-  box.scrollTop = box.scrollHeight;
-}
 
 /* ---------------- 渲染 ---------------- */
 function render() {
@@ -880,31 +597,26 @@ function render() {
 function renderPanel() {
   const me = game.players.get(myPid);
   const info = $("myInfo");
-  const spectate = $("spectateBtn");
 
   if (NET.active && !me) {            // 联机旁观：本局已开局，没有座位
     info.innerHTML = "<span class='noready'>旁观中 —— 本局已开局，不再收人</span>";
     $("actBtns").innerHTML = ""; $("actParams").innerHTML = "";
     $("radarBox").classList.add("hidden"); $("submitBtn").classList.add("hidden");
-    spectate.classList.add("hidden");
     return;
   }
   if (me && NET.active && me.pos === null) {      // 座位已有、位置还没到（私密快照在途）
     info.innerHTML = "<span class='noready'>正在同步你的位置…</span>";
     $("actBtns").innerHTML = ""; $("actParams").innerHTML = "";
     $("radarBox").classList.add("hidden"); $("submitBtn").classList.add("hidden");
-    spectate.classList.add("hidden");
     return;
   }
   if (!me.alive) {
     info.innerHTML = `<span class="dead">你已阵亡。</span>`;
     $("actBtns").innerHTML = ""; $("actParams").innerHTML = "";
     $("radarBox").classList.add("hidden"); $("submitBtn").classList.add("hidden");
-    spectate.classList.toggle("hidden", game.finished || (NET.active && NET.role !== "host"));
     return;
   }
   info.innerHTML = `我的位置：<b>${locName(me.pos)}</b>${me.stayStreak > 0 ? '　<span class="tag k">上轮未动，再不动就力竭</span>' : ""}`;
-  spectate.classList.add("hidden");
   if (game.finished) {
     $("actBtns").innerHTML = ""; $("actParams").innerHTML = "";
     $("radarBox").classList.add("hidden"); $("submitBtn").classList.add("hidden");
@@ -1081,36 +793,6 @@ function esc(s0) {
   return String(s0).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-/* 旁观快进：电脑之间自动打完 */
-function fastForward() {
-  if (NET.active) {                     // 联机：只有房主能驱动电脑快进
-    if (NET.role !== "host") { flash("只有房主能快进"); return; }
-    let gd = 0;
-    while (HOST.game && !HOST.game.finished && gd++ < 200) hostResolve();
-    hostPublish();
-    return;
-  }
-  let guard = 0;
-  while (!game.finished && guard++ < 200) {
-    const actions = {}, radars = {};
-    const preBridges = new Map(game.bridges);
-    for (const [pid, bot] of bots) {
-      const d = bot.decide(game);
-      actions[pid] = d.action;
-      if (d.radar !== null && d.radar !== undefined) radars[pid] = d.radar;
-    }
-    const lines = game.resolve(actions, radars);
-    for (const [pid, loc] of game.lastExposed) publicKnown.set(pid, { loc, round: game.round });
-    for (const d of game.lastDeaths) {
-      const p = game.players.get(d.pid);
-      if (p) publicKnown.set(d.pid, { loc: p.pos, round: game.round, dead: true });
-    }
-    for (const [, bot] of bots) bot.observe(game, game.lastExposed, preBridges);
-    lines.forEach(l => addLog(l));
-  }
-  render();
-}
-
 /* =====================================================================
    四、极简 MQTT 客户端（MQTT 3.1.1 over WebSocket，QoS0）
    —— 自己实现，不加载任何外部脚本库。只用于收发房间消息。
@@ -1192,27 +874,56 @@ class MiniMQTT {
 }
 
 /* =====================================================================
-   五、联机对局（公共中继 + 房主权威，无需自有服务器）
-   —— 房主 = 建房间的人；其浏览器持有完整对局并负责结算，其余人只收快照。
-   —— 快照分两份：pub（人人可见，不含他人位置）与 p/<pid>（每人自己的位置）。
-   —— 已知边界：公共中继无鉴权，房号即凭据；房主关页面 = 对局暂停。
+   五、联机对局（公共中继 + 房间内任一台浏览器当「房主」，无需自有服务器）
+   —— 房主 = 当前负责结算的那台浏览器，房间里的任何一人都能当。
+      房主掉线（关页面 / 断网 / 关机 / 休眠）后，房间内仍在线的浏览器里
+      cid 最小的那位会自动接管，并从保留的 authority 快照接着结算。
+      所以房间不绑定任何一台机器：你的电脑不在，别人照样把这局打完。
+   —— 三份快照：pub 人人可见（不含他人位置）、p/<cid> 只发给本人、
+      auth 是接管续局所需的完整权威状态（界面不展示，只用于接管）。
+   —— 已知边界：公共中继无鉴权，房号即凭据；位置保密只挡界面，
+      不挡打开开发者工具的人。别在公开场合贴房号，也别拿它做赌注。
    ===================================================================== */
 const BROKER_URL = "wss://broker.emqx.io:8084/mqtt";
 const NS = "ghcq/v1/";
-const ROUND_MS = 45000, HB_MS = 5000, STALE_MS = 25000;
+const ROUND_MS = 45000, HB_MS = 5000, STALE_MS = 25000, TAKEOVER_MS = 6000, AUTH_MS = 3000;
 const ROOM_ABC = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
-let MODE = "solo";
 const NET = { active: false, role: null, client: null, room: null, cid: "", name: "玩家",
-              myPid: null, view: null, priv: null, connected: false, hostSeen: 0, hostAlive: false,
-              timers: [], panelKey: "", viewSig: "", lastDeadline: 0, offset: 0, radar: null };
-const HOST = { players: [], game: null, bots: new Map(), phase: "lobby", submitted: new Map(),
-               deadline: 0, log: [], chat: [], exposed: new Map(), botN: 0, lastPub: 0, lastHb: 0 };
+              myPid: null, view: null, priv: null, connected: false,
+              hostSeen: 0, hostDeclared: false, hostCid: null, hostEpoch: 0, hostGone: 0,
+              presence: new Map(), auth: null, authSeen: 0, claimEpoch: 0,
+              lastTs: 0, offset: 0, _presHb: 0, _joinAt: 0,
+              timers: [], panelKey: "", viewSig: "", lastDeadline: 0, radar: null };
+const HOST = { players: [], game: null, phase: "lobby", submitted: new Map(), deadline: 0,
+               log: [], chat: [], exposed: new Map(), lastPub: 0, lastHb: 0, lastAuth: 0 };
 
 const ridHex = () => { const a = new Uint8Array(6); crypto.getRandomValues(a); return [...a].map(b => b.toString(16).padStart(2, "0")).join(""); };
 const newRoom = () => { const a = new Uint8Array(4); crypto.getRandomValues(a); return [...a].map(b => ROOM_ABC[b % ROOM_ABC.length]).join(""); };
 const TP = s => NS + NET.room + "/" + s;
 const nowMs = () => Date.now();
+
+/* 房主是否在线：心跳或声明都算，超时视为掉线 */
+const hostAlive = () => !!NET.hostDeclared && (nowMs() - NET.hostSeen) < STALE_MS;
+/* 仍在线、且不是现任房主的客户端（cid 排序，用于挑接管者） */
+function livePresence() {
+  const t = nowMs(), out = [];
+  for (const [cid, p] of NET.presence) {
+    if (!p.alive || t - p.seen >= STALE_MS) continue;
+    if (cid === NET.hostCid) continue;
+    out.push(cid);
+  }
+  if (!out.includes(NET.cid)) out.push(NET.cid);
+  return out.sort();
+}
+const isCandidate = () => NET.role === "guest" && livePresence()[0] === NET.cid;
+/* 可以接管吗：房主已消失够久，且这不是一个「从来没存在过」的房号 */
+function canTakeover(t) {
+  if (!isCandidate() || !NET.connected) return false;
+  if (t - NET.hostGone < TAKEOVER_MS) return false;
+  const freshAuth = !!(NET.auth && (t - NET.authSeen) < STALE_MS * 2);
+  return !!(NET.hostSeen || freshAuth);
+}
 
 function flash(msg) {
   let el = $("flash");
@@ -1233,62 +944,106 @@ function renderChat() {
   ["chatList", "chatListGame"].forEach(id => { const el = $(id); if (el) { el.innerHTML = html; el.scrollTop = el.scrollHeight; } });
 }
 
-/* ---------------- 模式切换 / 建房 / 加入 ---------------- */
-function switchMode(m) {
-  MODE = m;
-  $("tabSolo").classList.toggle("on", m === "solo");
-  $("tabNet").classList.toggle("on", m === "net");
-  $("soloBox").classList.toggle("hidden", m !== "solo");
-  $("onlineBox").classList.toggle("hidden", m !== "net");
-  if (m === "net") renderLobby();
+/* ---------------- 建房 / 加入 ---------------- */
+function publishPresence(alive) {
+  if (!NET.client || !NET.connected || !NET.room) return;
+  NET.client.publish(TP("presence/" + NET.cid), JSON.stringify({ cid: NET.cid, alive: !!alive }), { retain: true });
+}
+function pubHostAlive() {
+  if (!NET.client || !NET.connected) return;
+  NET.client.publish(TP("host"), JSON.stringify({ cid: NET.cid, alive: true, ts: nowMs(), epoch: NET.claimEpoch }), { retain: true });
+  NET.hostCid = NET.cid; NET.hostEpoch = NET.claimEpoch;
+  NET.hostSeen = nowMs(); NET.hostDeclared = true; NET.hostGone = 0;
+  publishPresence(true);
 }
 function netStart(role, room, name) {
   leaveRoom(true);
   NET.active = true; NET.role = role; NET.room = room; NET.name = name || "玩家";
-  NET.cid = ridHex(); NET.hostSeen = 0; NET.hostAlive = false; NET._joinAt = nowMs();
-  HOST.players = []; HOST.game = null; HOST.bots = new Map(); HOST.phase = "lobby";
-  HOST.submitted = new Map(); HOST.log = []; HOST.chat = []; HOST.exposed = new Map(); HOST.botN = 0;
-  HOST.players.push({ pid: 1, name: NET.name, cid: NET.cid, isBot: false, ready: true, seen: nowMs() });
+  NET.cid = ridHex(); NET.hostSeen = 0; NET.hostDeclared = false; NET.hostCid = null;
+  NET.hostEpoch = 0; NET.hostGone = 0; NET.presence = new Map(); NET.auth = null; NET.authSeen = 0;
+  NET.claimEpoch = 0; NET.lastTs = 0; NET.offset = 0; NET._joinAt = nowMs();
+  HOST.players = []; HOST.game = null; HOST.phase = "lobby";
+  HOST.submitted = new Map(); HOST.log = []; HOST.chat = []; HOST.exposed = new Map();
+  HOST.deadline = 0; HOST.lastPub = 0; HOST.lastHb = 0; HOST.lastAuth = 0;
+  HOST.players.push({ pid: 1, name: NET.name, cid: NET.cid, ready: true, seen: nowMs() });
   const opts = { clientId: "ghcq_" + NET.cid, keepalive: 40 };
-  if (role === "host") opts.will = { topic: TP("host"), payload: JSON.stringify({ cid: NET.cid, alive: false, ts: nowMs() }) };
+  // 遗嘱：房主掉线 -> host 主题转 alive:false；普通玩家掉线 -> 自己的在线标记转 false
+  opts.will = (role === "host")
+    ? { topic: TP("host"), payload: JSON.stringify({ cid: NET.cid, alive: false, ts: nowMs(), epoch: 0 }) }
+    : { topic: TP("presence/" + NET.cid), payload: JSON.stringify({ cid: NET.cid, alive: false }) };
   const c = NET.client = new MiniMQTT(BROKER_URL, opts);
   c.on("connect", () => {
     NET.connected = true;
-    const subs = [TP("pub"), TP("p/+"), TP("host")];
+    const subs = [TP("pub"), TP("p/" + NET.cid), TP("host"), TP("auth"), TP("presence/+")];
     if (role === "host") subs.push(TP("in"));           // 只有房主处理入站消息
     c.subscribe(subs);
+    publishPresence(true);
     c.publish(TP("in"), JSON.stringify({ t: "join", cid: NET.cid, name: NET.name }));
-    if (role === "host") { c.publish(TP("host"), JSON.stringify({ cid: NET.cid, alive: true, ts: nowMs() }), { retain: true }); hostPublish(); }
+    if (role === "host") { NET.claimEpoch = nowMs() + Math.floor(Math.random() * 800) + 1; pubHostAlive(); hostPublish(); }
     render();
   });
   c.on("close", () => { NET.connected = false; if (NET.active) render(); });
   c.on("message", m => {
     let o = null; try { o = JSON.parse(m.payload); } catch (e) { return; }
-    if (m.topic === TP("pub")) { NET.view = o; render(); }
-    else if (m.topic.indexOf(TP("p/")) === 0) { if (o && o.cid === NET.cid) { NET.priv = o; render(); } }
-    else if (m.topic === TP("host")) { NET.hostSeen = nowMs(); NET.hostAlive = !!o.alive; render(); }
-    else if (m.topic === TP("in") && role === "host") hostOnMessage(o);
+    if (m.topic === TP("pub")) {
+      NET.view = o;
+      if (o && o.ts && o.ts !== NET.lastTs) { NET.lastTs = o.ts; NET.offset = o.ts - nowMs(); }   // 房主时钟 - 本机时钟
+      render();
+    } else if (m.topic === TP("p/" + NET.cid)) {
+      if (o && o.cid === NET.cid) { NET.priv = o; render(); }
+    } else if (m.topic === TP("auth")) {
+      if (o && o.v === 1) { NET.auth = o; NET.authSeen = nowMs(); }
+    } else if (m.topic === TP("host")) {
+      if (!o) return;
+      const ep = o.epoch || 0;
+      if (o.alive) {
+        if (NET.role === "host") {
+          if (o.cid !== NET.cid && ep > NET.claimEpoch) stepDown(o.cid, ep);       // 有更新的房主声明 -> 退位
+        } else if (o.cid !== NET.hostCid || ep > NET.hostEpoch) {
+          NET.hostCid = o.cid; NET.hostEpoch = ep;
+          NET.hostSeen = nowMs(); NET.hostDeclared = true; NET.hostGone = 0;
+          render();
+        } else { NET.hostSeen = nowMs(); NET.hostDeclared = true; }
+      } else if (o.cid === NET.hostCid) {                                          // 遗嘱：现任房主掉了
+        NET.hostDeclared = false; NET.hostSeen = nowMs();
+        render();
+      }
+    } else if (m.topic.indexOf(TP("presence/")) === 0) {
+      if (!o || !o.cid) return;
+      NET.presence.set(o.cid, { alive: !!o.alive, seen: nowMs() });
+      render();
+    } else if (m.topic === TP("in") && NET.role === "host") hostOnMessage(o);
   });
   c.connect();
   location.hash = "#r=" + room;
   NET.timers.push(setInterval(netTick, 1000));
   NET.timers.push(setInterval(() => {
-    if (NET.client && NET.connected) {
-      NET.client.ping();
-      if (role === "guest") NET.client.publish(TP("in"), JSON.stringify({ t: "join", cid: NET.cid, name: NET.name }));
-    }
+    if (!NET.client || !NET.connected) return;
+    NET.client.ping();
+    if (NET.role === "guest") NET.client.publish(TP("in"), JSON.stringify({ t: "join", cid: NET.cid, name: NET.name }));
   }, HB_MS));
-  switchMode("net");
   render();
 }
 function leaveRoom(keepMode) {
   NET.timers.forEach(t => clearInterval(t)); NET.timers = [];
-  if (NET.client) { try { NET.client.close(); } catch (e) { } }
+  if (NET.client) {
+    try {
+      if (NET.connected && NET.room) {
+        NET.client.publish(TP("presence/" + NET.cid), JSON.stringify({ cid: NET.cid, alive: false }), { retain: true });
+        NET.client.publish(TP("p/" + NET.cid), "", { retain: true });          // 清掉自己的私密快照
+        if (NET.role === "host") NET.client.publish(TP("host"), JSON.stringify({ cid: NET.cid, alive: false, ts: nowMs(), epoch: 0 }), { retain: true });
+      }
+      NET.client.close();
+    } catch (e) { }
+  }
   const wasActive = NET.active;
   NET.active = false; NET.client = null; NET.room = null; NET.view = null; NET.priv = null;
-  NET.connected = false; NET.hostAlive = false; NET.myPid = null; NET.panelKey = ""; NET.viewSig = "";
-  NET.lastDeadline = 0; NET.offset = 0; NET._joinAt = 0;
-  HOST.game = null; HOST.players = []; HOST.bots = new Map(); HOST.phase = "lobby";
+  NET.connected = false; NET.hostDeclared = false; NET.hostSeen = 0; NET.hostCid = null;
+  NET.hostEpoch = 0; NET.hostGone = 0; NET.presence = new Map(); NET.auth = null; NET.authSeen = 0;
+  NET.claimEpoch = 0; NET.myPid = null; NET.panelKey = ""; NET.viewSig = "";
+  NET.lastDeadline = 0; NET.offset = 0; NET.lastTs = 0; NET._joinAt = 0;
+  HOST.game = null; HOST.players = []; HOST.phase = "lobby"; HOST.submitted = new Map();
+  HOST.log = []; HOST.chat = []; HOST.exposed = new Map(); HOST.deadline = 0;
   if (location.hash.indexOf("#r=") === 0) history.replaceState(null, "", location.pathname);
   if (wasActive && !keepMode) {
     game = null; $("game").classList.add("hidden"); $("setup").classList.remove("hidden");
@@ -1297,12 +1052,81 @@ function leaveRoom(keepMode) {
   }
 }
 
+/* ---------------- 房主接管（谁掉线，剩下的人接着结算） ---------------- */
+function stepDown(cid, epoch) {
+  if (NET.role !== "host") return;
+  NET.role = "guest";
+  NET.hostCid = cid; NET.hostEpoch = epoch;
+  NET.hostSeen = nowMs(); NET.hostDeclared = true; NET.hostGone = 0;
+  HOST.game = null; HOST.players = []; HOST.phase = "lobby"; HOST.submitted = new Map();
+  HOST.log = []; HOST.chat = []; HOST.exposed = new Map(); HOST.deadline = 0;
+  NET.view = null; NET.viewSig = "";
+  if (NET.client && NET.connected) NET.client.publish(TP("in"), JSON.stringify({ t: "join", cid: NET.cid, name: NET.name }));
+  flash("有更新的房主接手，本机转为普通玩家");
+  render();
+}
+function gameFromAuth(a) {
+  const g = new Game(HOST.players.map((p, i) => [i + 1, p.name]));
+  g.round = a.round || 0;
+  g.finished = !!a.finished;
+  g.winner = (a.winner === undefined ? null : a.winner);
+  g.bridges = new Map(a.bridges || []);
+  (a.players || []).forEach((ps, i) => {
+    const p = g.players.get(i + 1); if (!p) return;
+    p.pos = (ps.pos === undefined ? null : ps.pos);
+    p.alive = !!ps.alive; p.deathRound = ps.deathRound; p.deathReason = ps.deathReason;
+    p.stayStreak = ps.stayStreak || 0;
+    p.builtLast = !!ps.builtLast; p.demolishedLast = !!ps.demolishedLast;
+  });
+  return g;
+}
+function takeover() {
+  const a = (NET.auth && NET.auth.v === 1) ? NET.auth : null;
+  NET.role = "host";
+  NET.claimEpoch = nowMs() + Math.floor(Math.random() * 800) + 1;
+  HOST.players = []; HOST.game = null; HOST.phase = "lobby"; HOST.submitted = new Map();
+  HOST.log = []; HOST.chat = []; HOST.exposed = new Map(); HOST.deadline = 0;
+  if (a) {
+    HOST.phase = (a.phase === "playing" || a.phase === "over") ? a.phase : "lobby";
+    HOST.players = (a.players || []).map(p => ({ pid: p.pid, name: p.name, cid: p.cid, ready: !!p.ready, seen: nowMs() }));
+    HOST.log = (a.log || []).slice();
+    HOST.chat = (a.chat || []).slice();
+    HOST.exposed = new Map(a.exposed || []);
+    HOST.submitted = new Map((a.submitted || []).map(x => [x[0], x[1]]));
+  }
+  if (!HOST.players.length) HOST.players.push({ pid: 1, name: NET.name, cid: NET.cid, ready: true, seen: nowMs() });
+  if (!HOST.players.some(p => p.cid === NET.cid)) HOST.players.push({ pid: 0, name: NET.name, cid: NET.cid, ready: true, seen: nowMs() });
+  HOST.players.forEach((p, i) => { p.pid = i + 1; });
+  if (HOST.phase !== "lobby") {
+    try { HOST.game = gameFromAuth(a.game || {}); } catch (e) { HOST.game = null; }
+    if (HOST.game) {
+      // 剩余时间用「发布方自己的时钟差」算，跨机器时钟偏移不影响
+      const rest = Math.max(3000, ((a.game && a.game.deadline) || 0) - (a.ts || 0));
+      HOST.deadline = HOST.game.finished ? 0 : nowMs() + rest;
+      HOST.chat.push({ sys: true, text: "房主掉线，已由房间内另一位接管，对局继续。" });
+    } else {
+      HOST.phase = "lobby";
+      HOST.chat.push({ sys: true, text: "上一任房主的状态没接上，已退回大厅，重新开一局。" });
+    }
+  } else {
+    HOST.chat.push({ sys: true, text: "房主掉线，已由房间内另一位接管。" });
+  }
+  if (NET.client && NET.connected) {
+    NET.client.subscribe([TP("in")]);
+    NET.client.publish(TP("in"), JSON.stringify({ t: "join", cid: NET.cid, name: NET.name }));
+  }
+  pubHostAlive();
+  hostPublish();
+  flash("房主离线，本机已接管，对局继续");
+  render();
+}
+
 /* ---------------- 房主：快照与结算 ---------------- */
 function hostPubView() {
   const v = { room: NET.room, phase: HOST.phase, chat: HOST.chat.slice(-40), hostCid: NET.cid,
               round: 0, finished: false, winner: null, seats: [], bridges: [], submitted: [], deadline: 0, log: [], ts: nowMs() };
   if (HOST.phase === "lobby") {
-    v.seats = HOST.players.map((p, i) => ({ pid: i + 1, seat: i, name: p.name, cid: p.cid, isBot: !!p.isBot, ready: !!p.ready, alive: true }));
+    v.seats = HOST.players.map((p, i) => ({ pid: i + 1, seat: i, name: p.name, cid: p.cid, ready: !!p.ready, alive: true }));
     return v;
   }
   const g = HOST.game;
@@ -1310,12 +1134,12 @@ function hostPubView() {
   v.deadline = HOST.deadline;
   v.bridges = [...g.bridges].filter(x => x[1] > 0).map(x => [x[0], x[1]]);
   v.log = HOST.log.slice(-140);
-  v.submitted = HOST.players.filter(p => !p.isBot && HOST.submitted.has(p.pid)).map(p => p.pid);
+  v.submitted = HOST.players.filter(p => HOST.submitted.has(p.pid)).map(p => p.pid);
   v.seats = [...g.players.values()].sort((a, b) => a.seat - b.seat).map(p => {
     const meta = HOST.players.find(q => q.pid === p.pid) || {};
     const reveal = g.finished || !p.alive || HOST.exposed.has(p.pid);
     return { pid: p.pid, seat: p.seat, name: p.name, alive: p.alive, deathRound: p.deathRound,
-             deathReason: p.deathReason, stayStreak: p.stayStreak, isBot: !!meta.isBot, ready: true,
+             deathReason: p.deathReason, stayStreak: p.stayStreak, ready: true,
              knownLoc: reveal ? p.pos : null };
   });
   return v;
@@ -1328,28 +1152,39 @@ function hostPrivView(pid) {
            radar: rr ? { loc: rr.loc, count: rr.count } : null, round: g ? g.round : 0,
            submitted: HOST.submitted.has(pid) };
 }
+function authSnapshot() {
+  const g = HOST.game;
+  return { v: 1, ts: nowMs(), hostCid: NET.cid, phase: HOST.phase,
+           players: HOST.players.map(p => ({ pid: p.pid, name: p.name, cid: p.cid, ready: !!p.ready })),
+           chat: HOST.chat.slice(-40), log: HOST.log.slice(-140),
+           exposed: [...HOST.exposed],
+           submitted: [...HOST.submitted].map(x => [x[0], x[1]]),
+           game: g ? { round: g.round, finished: g.finished,
+                       winner: g.winner === undefined ? null : g.winner,
+                       deadline: HOST.deadline, bridges: [...g.bridges],
+                       players: [...g.players.values()].sort((a, b) => a.seat - b.seat).map(p => ({
+                         pos: p.pos, alive: p.alive, deathRound: p.deathRound, deathReason: p.deathReason,
+                         stayStreak: p.stayStreak, builtLast: p.builtLast, demolishedLast: p.demolishedLast })) } : null };
+}
+function hostPublishAuth() {
+  if (!NET.client || NET.role !== "host" || !NET.connected) return;
+  NET.client.publish(TP("auth"), JSON.stringify(authSnapshot()), { retain: true });
+}
 function hostPublish() {
   if (!NET.client || NET.role !== "host") return;
   NET.client.publish(TP("pub"), JSON.stringify(hostPubView()), { retain: true });
   for (const p of HOST.players) {
-    if (p.isBot || !p.cid) continue;
-    NET.client.publish(TP("p/" + p.pid), JSON.stringify(hostPrivView(p.pid)), { retain: true });
+    if (!p.cid) continue;
+    NET.client.publish(TP("p/" + p.cid), JSON.stringify(hostPrivView(p.pid)), { retain: true });
   }
-}
-function hostAddBot() {
-  HOST.botN += 1;
-  HOST.players.push({ pid: 0, name: BOT_NAMES[(HOST.botN - 1) % BOT_NAMES.length], cid: "", isBot: true, ready: true, seen: nowMs() });
+  hostPublishAuth();
 }
 function hostStart() {
-  if (HOST.players.length < 3) { flash("至少 3 人（含电脑）才能开局"); return; }
+  if (HOST.players.length < 3) { flash("至少 3 名真人才能开局"); return; }
   HOST.players.forEach((p, i) => { p.pid = i + 1; });
-  const infos = HOST.players.map(p => [p.pid, p.name]);
-  HOST.game = new Game(infos);
-  HOST.bots = new Map();
-  const diff = $("netDiff").value || "normal";
-  for (const p of HOST.players) if (p.isBot) { const b = new Bot(p.pid, diff); b.init(HOST.game); HOST.bots.set(p.pid, b); }
+  HOST.game = new Game(HOST.players.map(p => [p.pid, p.name]));
   HOST.phase = "playing"; HOST.exposed = new Map(); HOST.submitted = new Map(); HOST.log = [];
-  HOST.log.push(`对局开始：${HOST.players.length} 人（真人 ${HOST.players.filter(p => !p.isBot).length}）。先手序 ${infos.map(i => i[1]).join(" → ")}。`);
+  HOST.log.push(`对局开始：${HOST.players.length} 人。先手序 ${HOST.players.map(p => p.name).join(" → ")}。`);
   HOST.log.push("所有人起始各占一个基地，位置对他人保密。");
   HOST.deadline = nowMs() + ROUND_MS;
   hostPublish();
@@ -1359,33 +1194,32 @@ function hostResolve() {
   if (!g || g.finished) return;
   const actions = {}, radars = {};
   for (const p of HOST.players) {
-    if (p.isBot) continue;
     const pp = g.players.get(p.pid);
     if (!pp || !pp.alive) continue;
     const s = HOST.submitted.get(p.pid);
     actions[p.pid] = (s && s.action) ? s.action : { type: "stay" };
     if (s && s.radar !== null && s.radar !== undefined) radars[p.pid] = s.radar;
   }
-  const preBridges = new Map(g.bridges);
-  for (const [pid, bot] of HOST.bots) {
-    const pp = g.players.get(pid);
-    if (!pp || !pp.alive) continue;
-    const d = bot.decide(g);
-    actions[pid] = d.action;
-    if (d.radar !== null && d.radar !== undefined) radars[pid] = d.radar;
-  }
   const lines = g.resolve(actions, radars);
   for (const [pid, loc] of g.lastExposed) HOST.exposed.set(pid, loc);
   for (const d of g.lastDeaths) { const p = g.players.get(d.pid); if (p) HOST.exposed.set(d.pid, p.pos); }
-  for (const [, bot] of HOST.bots) {
-    bot.observe(g, g.lastExposed, preBridges);
-    for (const [pid, res] of g.lastRadar) if (pid === bot.pid) bot.useRadar(res.loc, res.count, g);
-  }
   HOST.log = HOST.log.concat(lines);
   HOST.submitted = new Map();
   if (g.finished) { HOST.phase = "over"; HOST.deadline = 0; HOST.log.push("—— 对局结束 ——"); }
   else HOST.deadline = nowMs() + ROUND_MS;
   hostPublish();
+}
+/* 本轮是否可以结算：在线的活人都提交了；掉线的人按「不动」提前结算，不拖着大家等满 45 秒 */
+function roundReady(t) {
+  const g = HOST.game;
+  if (!g) return false;
+  const aliveIds = [...g.players.values()].filter(p => p.alive).map(p => p.pid);
+  if (!aliveIds.length) return false;
+  return aliveIds.every(pid => {
+    if (HOST.submitted.has(pid)) return true;
+    const meta = HOST.players.find(p => p.pid === pid);
+    return !meta || !meta.cid || (t - meta.seen) >= STALE_MS;
+  });
 }
 function hostOnMessage(o) {
   if (!o || !o.t) return;
@@ -1395,9 +1229,9 @@ function hostOnMessage(o) {
     if (HOST.phase !== "lobby") return;                        // 开局后不再收人
     if (!who) {
       if (HOST.players.length >= 8) return;
-      HOST.players.push({ pid: 0, name: (o.name || "玩家").slice(0, 12), cid: o.cid, isBot: false, ready: false, seen: nowMs() });
+      HOST.players.push({ pid: 0, name: (o.name || "玩家").slice(0, 12), cid: o.cid, ready: false, seen: nowMs() });
       HOST.chat.push({ sys: true, text: `${(o.name || "玩家")} 加入了房间` });
-    } else if (o.name && !who.isBot && who.name !== o.name.slice(0, 12)) { who.name = o.name.slice(0, 12); }
+    } else if (o.name && who.name !== o.name.slice(0, 12)) { who.name = o.name.slice(0, 12); }
     hostPublish();
   } else if (o.t === "ready") {
     if (who && HOST.phase === "lobby") { who.ready = !o.off; hostPublish(); }
@@ -1415,32 +1249,35 @@ function hostOnMessage(o) {
     HOST.submitted.set(who.pid, { action: vr[0] ? vr[1] : { type: "stay" },
                                   radar: (o.radar === null || o.radar === undefined) ? null : o.radar });
     hostPublish();
-    const aliveHumans = HOST.players.filter(q => !q.isBot).map(q => q.pid)
-      .filter(x => { const pp = HOST.game.players.get(x); return pp && pp.alive; });
-    if (aliveHumans.length && aliveHumans.every(x => HOST.submitted.has(x))) hostResolve();
+    if (roundReady(nowMs())) hostResolve();
   }
 }
 function netTick() {
   if (!NET.active) return;
   const t = nowMs();
   if (NET.role === "host") {
-    if (NET.connected && t - HOST.lastHb > HB_MS) {
-      HOST.lastHb = t;
-      NET.client.publish(TP("host"), JSON.stringify({ cid: NET.cid, alive: true, ts: t }), { retain: true });
-    }
+    if (NET.connected && t - HOST.lastHb > HB_MS) { HOST.lastHb = t; pubHostAlive(); }
     if (HOST.phase === "lobby") {
       const before = HOST.players.length;
-      HOST.players = HOST.players.filter(p => p.isBot || p.cid === NET.cid || t - p.seen < STALE_MS);
+      HOST.players = HOST.players.filter(p => p.cid === NET.cid || t - p.seen < STALE_MS);
       if (HOST.players.length !== before) hostPublish();
       else if (NET.connected && t - HOST.lastPub > 2500) { HOST.lastPub = t; hostPublish(); }
-    } else if (HOST.phase === "playing" && HOST.game && !HOST.game.finished && t > HOST.deadline) {
-      HOST.log.push("本轮超时：未提交者的行动按「不动」结算。");
-      hostResolve();
+    } else if (HOST.phase === "playing" && HOST.game && !HOST.game.finished) {
+      if (t > HOST.deadline) {
+        HOST.log.push("本轮超时：未提交者的行动按「不动」结算。");
+        hostResolve();
+      } else if (roundReady(t)) hostResolve();
     }
-  } else if (NET.hostSeen) {
-    NET.hostAlive = (t - NET.hostSeen) < STALE_MS;
+    if (NET.connected && t - HOST.lastAuth > AUTH_MS) { HOST.lastAuth = t; hostPublishAuth(); }
+  } else {
+    if (NET.connected && t - NET._presHb > HB_MS) { NET._presHb = t; publishPresence(true); }
+    if (hostAlive()) NET.hostGone = 0;
+    else {
+      if (!NET.hostGone) NET.hostGone = t;
+      if (canTakeover(t)) takeover();
+    }
   }
-  if (MODE === "net" && NET.room) {
+  if (NET.room) {
     const v = NET.view;
     if (!v || v.phase === "lobby") renderLobby();
     else if (NET.viewSig) netBarFill(v);
@@ -1475,41 +1312,43 @@ function renderLobby() {
   if (!NET.room) return;
   const isHost = NET.role === "host";
   $("roomCodeShow").textContent = NET.room;
-  $("netRole").textContent = isHost ? "身份：房主（本局由你的浏览器结算）" : "身份：玩家";
+  $("netRole").textContent = isHost ? "身份：房主（本机结算）"
+    : (hostAlive() ? "身份：玩家" : (isCandidate() ? "身份：玩家（房主离线，本机将接管）" : "身份：玩家（房主离线）"));
   $("netStatus").innerHTML = (NET.connected ? '<span class="dot ok"></span>中继已连接' : '<span class="dot bad"></span>连接中继…')
-    + (!isHost && NET.connected ? (NET.hostAlive ? " · 房主在线" : " · 等待房主…") : "");
+    + (!isHost && NET.connected ? (hostAlive() ? " · 房主在线" : " · 等待房主…") : "");
   $("roomLink").value = location.origin + location.pathname + "#r=" + NET.room;
-  $("addBotBtn").classList.toggle("hidden", !isHost);
-  $("dropBotBtn").classList.toggle("hidden", !isHost);
-  $("netDiff").classList.toggle("hidden", !isHost);
   $("startNetBtn").classList.toggle("hidden", !isHost);
   $("readyBtn").classList.toggle("hidden", isHost);
   const list = (v && v.seats) || [];
   $("lobbyCount").textContent = list.length ? `（${list.length}/8）` : "";
   $("lobbyList").innerHTML = list.length
-    ? list.map(s => `<div><span class="${s.cid === NET.cid ? "me" : ""}">P${s.seat + 1} ${esc(s.name)}${s.isBot ? "（电脑）" : ""}${s.cid === NET.cid ? " (我)" : ""}</span>`
+    ? list.map(s => `<div><span class="${s.cid === NET.cid ? "me" : ""}">P${s.seat + 1} ${esc(s.name)}${s.cid === NET.cid ? " (我)" : ""}</span>`
       + `<span class="seat ${s.ready ? "ready" : "noready"}">${s.ready ? "已准备" : "未准备"}</span></div>`).join("")
     : '<div><span class="noready">还没有人…</span></div>';
-  if (isHost) $("startNetBtn").disabled = list.length < 3;
+  if (isHost) {
+    $("startNetBtn").disabled = list.length < 3;
+    $("startNetBtn").textContent = list.length < 3 ? `开始对局（还差 ${3 - list.length} 人）` : `开始对局（${list.length} 人）`;
+  }
   const me = list.find(s => s.cid === NET.cid);
   if (me) $("readyBtn").textContent = me.ready ? "取消准备" : "我准备好了";
-  if (!isHost && NET.connected && !NET.hostAlive && NET.hostSeen === 0 && (nowMs() - NET._joinAt) > 4000)
+  if (!isHost && NET.connected && !NET.hostSeen && (nowMs() - NET._joinAt) > 4000)
     $("netStatus").innerHTML = '<span class="dot bad"></span>房间里没有房主 —— 检查房号，或自己创建一间';
   renderChat();
 }
 
 /* ---------------- 对局快照 -> 本地渲染 ---------------- */
 function netBarFill(v) {
-  const alive = (v.seats || []).filter(s => s.alive && !s.isBot).length;
+  const alive = (v.seats || []).filter(s => s.alive).length;
   const subs = (v.submitted || []).length;
+  const isHost = NET.role === "host";
   $("nbRoom").textContent = NET.room;
-  $("nbRole").textContent = NET.role === "host" ? "房主" : "玩家";
+  $("nbRole").textContent = isHost ? "房主" : "玩家";
   $("nbSub").textContent = v.finished ? "—" : (subs + "/" + alive);
-  const left = v.deadline ? Math.max(0, Math.ceil((v.deadline - nowMs() - NET.offset) / 1000)) : 0;
+  const left = v.deadline ? Math.max(0, Math.ceil((v.deadline - (nowMs() + NET.offset)) / 1000)) : 0;
   $("nbClock").textContent = v.finished ? "已结束" : (left + " 秒");
-  const ok = NET.connected && (NET.role === "host" || NET.hostAlive);
+  const ok = NET.connected && (isHost || hostAlive());
   $("nbConn").innerHTML = `<span class="dot ${ok ? "ok" : "bad"}"></span>`
-    + (!NET.connected ? "连接中…" : (NET.role === "host" ? "房主在线" : (NET.hostAlive ? "已连接" : "房主离线 · 对局暂停")));
+    + (!NET.connected ? "连接中…" : (isHost ? "本机结算" : (hostAlive() ? "已连接" : "房主离线 · 正在移交…")));
 }
 function netPrepare() {
   if (!NET.active) return true;
@@ -1517,7 +1356,7 @@ function netPrepare() {
   const v = NET.view;
   if (!v || v.phase === "lobby") { renderLobby(); return false; }
   $("setup").classList.add("hidden"); $("game").classList.remove("hidden");
-  if (v.deadline !== NET.lastDeadline) { NET.lastDeadline = v.deadline; NET.offset = v.deadline ? (v.deadline - nowMs()) : 0; }
+  if (v.deadline !== NET.lastDeadline) NET.lastDeadline = v.deadline;
   netBarFill(v); renderChat();
   myPid = (NET.priv && NET.priv.pid !== null && NET.priv.pid !== undefined) ? NET.priv.pid : -1;
   // 私密快照可能比公开快照后到：每次都把「我自己的位置」写回本地对局。
@@ -1540,7 +1379,7 @@ function netPrepare() {
     p.pos = (s.knownLoc === null || s.knownLoc === undefined) ? null : s.knownLoc;
   });
   if (NET.priv && NET.priv.pos !== null && NET.priv.pos !== undefined) { const p = g.players.get(myPid); if (p) p.pos = NET.priv.pos; }
-  game = g; bots = new Map(); publicKnown = new Map();
+  game = g; publicKnown = new Map();
   v.seats.forEach(s => { if (s.knownLoc !== null && s.knownLoc !== undefined) publicKnown.set(s.pid, { loc: s.knownLoc, round: g.round, dead: !s.alive }); });
   logLines = (v.log || []).slice();
   renderLogBox(logLines);
@@ -1548,13 +1387,7 @@ function netPrepare() {
 }
 
 /* ---------------- 绑定 ---------------- */
-$("startBtn").onclick = startGame;
 $("submitBtn").onclick = submitMove;
-$("spectateBtn").onclick = fastForward;
-$("nameInput").addEventListener("keydown", e => { if (e.key === "Enter") startGame(); });
-
-$("tabSolo").onclick = () => switchMode("solo");
-$("tabNet").onclick = () => switchMode("net");
 $("createRoomBtn").onclick = () => netStart("host", newRoom(), ($("netName").value || "玩家").trim());
 $("joinRoomBtn").onclick = () => {
   const code = ($("netRoom").value || "").trim().toUpperCase();
@@ -1566,16 +1399,6 @@ $("netName").addEventListener("change", () => {
   if (NET.client && NET.connected) NET.client.publish(TP("in"), JSON.stringify({ t: "join", cid: NET.cid, name: NET.name }));
 });
 $("netRoom").addEventListener("keydown", e => { if (e.key === "Enter") $("joinRoomBtn").click(); });
-$("addBotBtn").onclick = () => {
-  if (NET.role !== "host" || HOST.phase !== "lobby") return;
-  if (HOST.players.length >= 8) { flash("最多 8 人"); return; }
-  hostAddBot(); hostPublish(); renderLobby();
-};
-$("dropBotBtn").onclick = () => {
-  if (NET.role !== "host" || HOST.phase !== "lobby") return;
-  for (let i = HOST.players.length - 1; i >= 0; i--) if (HOST.players[i].isBot) { HOST.players.splice(i, 1); break; }
-  hostPublish(); renderLobby();
-};
 $("readyBtn").onclick = netSendReady;
 $("startNetBtn").onclick = () => { if (NET.role === "host") hostStart(); };
 $("leaveBtn").onclick = () => leaveRoom();
