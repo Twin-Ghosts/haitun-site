@@ -1,0 +1,6 @@
+# 故意留空：server.py 只用 Python 标准库，没有第三方依赖。
+#
+# 为什么要放这个文件：Render 的 Python 运行时默认构建命令是
+#   pip install -r requirements.txt
+# 仓库里没有 requirements.txt 时这条命令会直接报错、构建失败。
+# 放一个空文件，命令成功且什么都不装 —— 首次部署必过。
