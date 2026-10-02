@@ -1066,7 +1066,11 @@ function stepDown(cid, epoch) {
   render();
 }
 function gameFromAuth(a) {
-  const g = new Game(HOST.players.map((p, i) => [i + 1, p.name]));
+  // 座位数只认权威快照里的座位表：接管者若不在原座位上（例如隔天凭链接回来的人），
+  // 他当房主但只旁观，绝不往已开局的对局里塞第 4 个人（那会改变地图几何）
+  const names = (a && a.seats && a.seats.length) ? a.seats
+    : HOST.players.map((p, i) => p.name);
+  const g = new Game(names.map((nm, i) => [i + 1, nm || ("玩家" + (i + 1))]));
   g.round = a.round || 0;
   g.finished = !!a.finished;
   g.winner = (a.winner === undefined ? null : a.winner);
@@ -1162,6 +1166,7 @@ function authSnapshot() {
            game: g ? { round: g.round, finished: g.finished,
                        winner: g.winner === undefined ? null : g.winner,
                        deadline: HOST.deadline, bridges: [...g.bridges],
+                       seats: [...g.players.values()].sort((a, b) => a.seat - b.seat).map(p => p.name),
                        players: [...g.players.values()].sort((a, b) => a.seat - b.seat).map(p => ({
                          pos: p.pos, alive: p.alive, deathRound: p.deathRound, deathReason: p.deathReason,
                          stayStreak: p.stayStreak, builtLast: p.builtLast, demolishedLast: p.demolishedLast })) } : null };
