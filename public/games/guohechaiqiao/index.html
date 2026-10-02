@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>过河拆桥 · 单机版</title>
+<meta name="description" content="过河拆桥：星形地图、暗选行动、拆桥断退路的策略博弈游戏。纯前端单机，无需联网与账号。">
+<style>
+  :root{--bg:#0f1226;--card:#171b34;--line:#2a2f52;--fg:#e8ebff;--muted:#9aa0c8;--accent:#7c8cff;--hot:#ff6b8a;--ok:#35d07f;--gold:#ffd27a;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;line-height:1.6;}
+  .hidden{display:none!important;}
+  .wrap{max-width:1040px;margin:0 auto;padding:18px 14px 40px;}
+  a{color:var(--accent);}
+  h1{font-size:26px;text-align:center;margin:6px 0 2px;letter-spacing:2px;}
+  .sub{text-align:center;font-size:13px;color:var(--muted);margin-bottom:6px;}
+  .back{display:block;text-align:center;font-size:13px;margin-bottom:14px;text-decoration:none;}
+  .back:hover{text-decoration:underline;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+  .card h3{margin:0 0 10px;font-size:15px;color:var(--accent);}
+  input,select,button{font-family:inherit;font-size:14px;}
+  input,select{background:#1a1e3a;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;}
+  button{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;font-weight:600;}
+  button:hover{background:#6a7aee;}button:disabled{background:#3a3f5e;cursor:not-allowed;color:#8a90b5;}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);}
+  button.ghost:hover{background:#20254a;}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}
+  @media(max-width:760px){.grid{grid-template-columns:1fr;}}
+  label{font-size:13px;color:var(--muted);min-width:64px;}
+  .plist div{padding:5px 0;border-bottom:1px solid #222a4d;font-size:14px;display:flex;justify-content:space-between;gap:8px;}
+  .plist .me{color:var(--accent);font-weight:700;}
+  .dead{color:var(--hot);text-decoration:line-through;opacity:.6;}
+  .seat{color:var(--muted);font-size:12px;text-align:right;}
+  .log{height:230px;overflow-y:auto;background:#12152b;border-radius:8px;padding:8px 12px;font-size:13px;}
+  .log div{padding:3px 0;border-bottom:1px solid #1c2140;}
+  .log div.fresh{background:#1b2145;border-radius:5px;padding-left:6px;}
+  .log div.big{color:var(--gold);font-weight:700;}
+  .bridges{font-size:13px;color:var(--muted);margin-top:8px;}
+  .bridges span{display:inline-block;background:#232848;border-radius:6px;padding:2px 8px;margin:3px;}
+  .bridges span.d1{color:var(--gold);}
+  .banner{text-align:center;font-size:19px;font-weight:800;padding:14px;border-radius:10px;background:#1a1430;color:var(--gold);margin-bottom:14px;}
+  .actbtns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+  .actbtns button.sel{outline:2px solid #fff;}
+  .hintbar{font-size:13px;color:var(--muted);margin:8px 0;}
+  .rules{font-size:13px;line-height:1.75;color:#c9cfe9;}
+  .rules ul{margin:6px 0;padding-left:20px;}
+  .rules b{color:var(--fg);}
+  details summary{cursor:pointer;color:var(--accent);font-size:14px;font-weight:600;}
+  .tag{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700;margin-left:6px;}
+  .tag.k{background:#301420;color:var(--hot);}
+  .tag.s{background:#2a2440;color:var(--gold);}
+  .festival{font-size:12px;color:var(--muted);text-align:center;margin-top:18px;line-height:1.9;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>过河拆桥</h1>
+  <div class="sub">星形地图 · 同时暗选 · 拆桥断退路</div>
+  <a class="back" href="../../index.html">← 返回游戏列表</a>
+
+  <!-- ============ 开局设置 ============ -->
+  <div id="setup" class="card">
+    <h3>开始新对局</h3>
+    <div class="row">
+      <label for="nameInput">昵称</label>
+      <input id="nameInput" placeholder="输入你的昵称" maxlength="12" value="玩家" style="flex:1;min-width:140px">
+    </div>
+    <div class="row">
+      <label for="numPlayers">人数</label>
+      <select id="numPlayers">
+        <option value="3">3 人（快局）</option>
+        <option value="4">4 人</option>
+        <option value="5">5 人</option>
+        <option value="6" selected>6 人（推荐）</option>
+        <option value="7">7 人</option>
+        <option value="8">8 人（标准局）</option>
+      </select>
+      <label for="difficulty">AI 难度</label>
+      <select id="difficulty">
+        <option value="easy">简单</option>
+        <option value="normal" selected>普通</option>
+        <option value="hard">困难</option>
+      </select>
+    </div>
+    <div class="row">
+      <button id="startBtn">开始对局</button>
+      <span class="hintbar" style="margin:0">位置随机分配，先手序 = 座次号（公开）。</span>
+    </div>
+    <details style="margin-top:10px">
+      <summary>📖 规则速览 / 怎么玩</summary>
+      <div class="rules" style="margin-top:10px">
+        <b>目标</b>：最后存活者获胜（其他人全部死亡）。<br>
+        <b>地图</b>：中心岛 C + n 个基地 B1…Bn。每人起始占一个基地，位置对他人保密。每座基地初始有一座桥连向 C，桥有 <b>2 点耐久</b>，走满 2 次即永久坍塌。<br>
+        <b>每轮五选一（所有人同时暗选，全部提交后一起结算）</b>：
+        <ul>
+          <li><b>建桥</b>：从你所在地，向一个「与你现在没有直连桥」的地点建一座桥（耐久 2）。不能连续两轮建。</li>
+          <li><b>移动</b>：沿相邻的桥走到对岸，消耗该桥 1 点耐久。</li>
+          <li><b>拆桥</b>：拆掉「你与某地点之间的桥」。可以赌它本回合刚被建成；若结算时它不存在，则这一手转为「不动」。不能连续两轮拆。</li>
+          <li><b>猜杀</b>：指名「一名玩家 + 一个地点」（只能是你所在地，或与你直连的相邻地点），断言他回合结束时在那里。猜中对方死，<b>猜错自己死</b>。</li>
+          <li><b>不动</b>：留在原地，但会<b>公开暴露你的位置</b>。</li>
+        </ul>
+        <b>结算顺序</b>：建桥 → 拆桥 → 移动（先手正序）→ 猜杀（先手倒序）→ 连通性死亡 → 反僵持 → 雷达。<br>
+        <b>死法（不只靠猜）</b>：
+        <ul>
+          <li><b>坠桥</b>：你正要走的桥被拆掉、或被先手者走到坍塌 → 坠亡。</li>
+          <li><b>孤立死</b>：回合结束时你所在地不与任何地方相连 → 死。</li>
+          <li><b>分割全灭</b>：地图被拆成几块时，只有最强的一块存活（比①人数 ②占地数 ③是否含中心岛），其余全灭。</li>
+          <li><b>力竭</b>：连续两回合都「不动」，第二回合结束时死亡（不许一直观望）。</li>
+        </ul>
+        <b>先手序</b>：整局固定、公开。移动按正序（P1 先动），猜杀按倒序（Pn 先开枪）——移动占先的人猜杀反而落后，是一把双刃剑。<br>
+        <b>中心岛雷达（附赠，不占行动）</b>：回合开始时人在 C 的玩家，可以额外指定一个基地，回合结束时得知那里此刻有几个人（只知道人数）。<br>
+        <b>核心杀招</b>：推断出对手在 Bk，就去拆掉 Bk↔C 那唯一的桥——他若留下则孤立死，若正过桥则坠桥身亡。这就是「过河拆桥」。
+      </div>
+    </details>
+  </div>
+
+  <!-- ============ 对战 ============ -->
+  <div id="game" class="hidden">
+    <div id="banner" class="banner hidden"></div>
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h3>我的行动</h3>
+          <div id="myInfo"></div>
+          <div id="radarResult" style="font-size:13px;color:var(--gold);margin:4px 0"></div>
+          <div class="hintbar" id="actionHint">选择你的行动：</div>
+          <div class="actbtns" id="actBtns"></div>
+          <div id="actParams"></div>
+          <div id="radarBox" class="hidden" style="margin:8px 0;padding:8px 10px;background:#1a1430;border:1px solid #3a2a5a;border-radius:8px">
+            <label style="min-width:0">📡 附赠雷达（你在中心岛）——探测某基地人数：</label>
+            <div id="radarParam" style="margin-top:6px"></div>
+          </div>
+          <div class="row">
+            <button id="submitBtn" disabled>提交行动</button>
+            <button id="spectateBtn" class="ghost hidden">快进到结束 ▶</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>玩家（位置保密）</h3>
+          <div class="plist" id="gamePlist"></div>
+          <div class="hintbar" style="margin-bottom:0">「公开位置」只会在有人「不动」暴露、或死亡时出现在日志里。</div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>战场（第 <span id="roundNum">0</span> 轮）</h3>
+          <svg id="mapSvg" viewBox="0 0 320 320" style="width:100%;max-width:340px;display:block;margin:0 auto"></svg>
+          <div class="bridges" id="bridgesBox"></div>
+        </div>
+        <div class="card">
+          <h3>公开日志</h3>
+          <div class="log" id="logBox"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="festival">纯前端单机版 · 打开即玩 · 不上传任何数据、不请求任何外部接口</div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   一、规则引擎：逐条对应桌面版 game.py（纯逻辑，无网络、无模型调用）
+   ===================================================================== */
+const CENTER = 0;
+const INIT_DURABILITY = 2;
+const MAX_ROUNDS = 50;               // 回合上限刹车（避免极端僵局）
+const bkey = (a, b) => (a < b ? a + "-" + b : b + "-" + a);
+
+class Player {
+  constructor(pid, name, seat) {
+    this.pid = pid; this.name = name; this.seat = seat;
+    this.pos = null; this.alive = true;
+    this.builtLast = false; this.demolishedLast = false;
+    this.stayStreak = 0; this.deathRound = null; this.deathReason = null;
+  }
+}
+
+class Game {
+  constructor(playersInfo) {          // [[pid, name], ...] 顺序即先手序
+    this.n = playersInfo.length;
+    this.round = 0; this.finished = false; this.winner = null;
+    this.lastRadar = new Map(); this.history = [];
+    this.lastExposed = new Map(); this.lastDeaths = [];
+    this.players = new Map();
+    const baseIds = [];
+    for (let i = 1; i <= this.n; i++) baseIds.push(i);
+    playersInfo.forEach((info, seat) => {
+      const p = new Player(info[0], info[1], seat);
+      p.pos = baseIds[seat];                       // 一人一基地
+      this.players.set(p.pid, p);
+    });
+    this.bridges = new Map();
+    baseIds.forEach(b => this.bridges.set(bkey(CENTER, b), INIT_DURABILITY));
+    this.locations = [CENTER].concat(baseIds);
+  }
+
+  /* ---------- 查询 ---------- */
+  locName(loc) { return loc === CENTER ? "C" : "B" + loc; }
+  alivePlayers() { return [...this.players.values()].filter(p => p.alive); }
+  others(pid) { return this.alivePlayers().filter(p => p.pid !== pid); }
+  dur(a, b) { const v = this.bridges.get(bkey(a, b)); return v === undefined ? 0 : v; }
+
+  neighbors(loc) {
+    const res = [];
+    for (const [k, dur] of this.bridges) {
+      if (dur <= 0) continue;
+      const parts = k.split("-").map(Number);
+      if (parts[0] === loc) res.push(parts[1]);
+      else if (parts[1] === loc) res.push(parts[0]);
+    }
+    return res;
+  }
+
+  /* ---------- 合法行动 ---------- */
+  legalActions(pid) {
+    const p = this.players.get(pid);
+    const empty = { canBuild: false, buildTargets: [], canDemolish: false, demolishTargets: [],
+                    moveTargets: [], guessLocs: [], guessTargets: [], canRadar: false, radarTargets: [], canStay: false };
+    if (!p || !p.alive) return empty;
+    const pos = p.pos;
+    const nb = this.neighbors(pos);
+    const buildTargets = [];
+    if (!p.builtLast) {
+      for (const loc of this.locations) {
+        if (loc === pos) continue;
+        if (this.dur(pos, loc) <= 0) buildTargets.push(loc);
+      }
+    }
+    const demolishTargets = p.demolishedLast ? [] : this.locations.filter(l => l !== pos);
+    const guessLocs = [pos].concat(nb);
+    const guessTargets = this.others(pid).map(q => q.pid);
+    const canRadar = (pos === CENTER);
+    const radarTargets = canRadar ? this.locations.filter(l => l !== CENTER) : [];
+    return { canBuild: !p.builtLast, buildTargets, canDemolish: !p.demolishedLast, demolishTargets,
+             moveTargets: nb, guessLocs, guessTargets, canRadar, radarTargets, canStay: true };
+  }
+
+  validate(pid, action) {
+    const p = this.players.get(pid);
+    if (!p || !p.alive) return [false, "已死亡"];
+    const la = this.legalActions(pid);
+    const t = action.type;
+    if (t === "stay") return [true, { type: "stay" }];
+    if (t === "build") {
+      if (la.canBuild && la.buildTargets.indexOf(action.target) >= 0) return [true, { type: "build", target: action.target }];
+      return [false, "非法建桥目标"];
+    }
+    if (t === "demolish") {
+      if (p.demolishedLast) return [false, "上一轮已拆桥，不能连续两轮"];
+      if (Number.isInteger(action.target) && this.locations.indexOf(action.target) >= 0 && action.target !== p.pos)
+        return [true, { type: "demolish", target: action.target }];
+      return [false, "非法拆桥目标"];
+    }
+    if (t === "move") {
+      if (la.moveTargets.indexOf(action.target) >= 0) return [true, { type: "move", target: action.target }];
+      return [false, "非法移动目标（无桥或耐久耗尽）"];
+    }
+    if (t === "guess") {
+      if (la.guessLocs.indexOf(action.loc) >= 0 && la.guessTargets.indexOf(action.target) >= 0)
+        return [true, { type: "guess", loc: action.loc, target: action.target }];
+      return [false, "非法猜杀（射程外或目标无效）"];
+    }
+    return [false, "未知行动"];
+  }
+
+  validateRadar(pid, tgt) {
+    const la = this.legalActions(pid);
+    if (la.canRadar && la.radarTargets.indexOf(tgt) >= 0) return [true, tgt];
+    return [false, null];
+  }
+
+  /* ---------- 结算 ---------- */
+  resolve(actions, radars) {
+    radars = radars || {};
+    this.round += 1;
+    const r = this.round, log = [], deaths = [];
+    this.lastRadar = new Map();
+    this.lastExposed = new Map();
+    const killed = (p, reason) => { p.alive = false; p.deathRound = r; p.deathReason = reason; deaths.push({ pid: p.pid, name: p.name, reason }); };
+
+    const aliveIds = this.alivePlayers().map(p => p.pid);
+    const act = {};
+    for (const pid of aliveIds) {
+      const a = actions[pid] || { type: "stay" };
+      const vr = this.validate(pid, a);
+      act[pid] = vr[0] ? vr[1] : { type: "stay" };
+    }
+    const radarReq = new Map();
+    for (const pid of aliveIds) {
+      if (radars[pid] !== undefined && radars[pid] !== null) {
+        const vr = this.validateRadar(pid, radars[pid]);
+        if (vr[0]) radarReq.set(pid, vr[1]);
+      }
+    }
+    const order = aliveIds.slice().sort((a, b) => this.players.get(a).seat - this.players.get(b).seat);
+
+    for (const pid of aliveIds) {
+      this.players.get(pid).builtLast = (act[pid].type === "build");
+      this.players.get(pid).demolishedLast = (act[pid].type === "demolish");
+    }
+
+    // 阶段1 建桥（同时生效）
+    const builders = [];
+    for (const pid of order) {
+      const a = act[pid];
+      if (a.type === "build") {
+        this.bridges.set(bkey(this.players.get(pid).pos, a.target), INIT_DURABILITY);
+        builders.push(this.players.get(pid).name);
+      }
+    }
+    // 阶段2 拆桥（同时生效）
+    const demolishers = [], toRemove = new Set();
+    for (const pid of order) {
+      const a = act[pid];
+      if (a.type === "demolish") {
+        const k = bkey(this.players.get(pid).pos, a.target);
+        if (this.dur(this.players.get(pid).pos, a.target) > 0) { toRemove.add(k); demolishers.push(this.players.get(pid).name); }
+        else act[pid] = { type: "stay" };                 // 桥不存在 -> 转为不动
+      }
+    }
+    toRemove.forEach(k => this.bridges.set(k, 0));
+
+    // 阶段3 移动（先手正序，耐久实时扣减）
+    const exposed = new Set();
+    for (const pid of order) {
+      const a = act[pid];
+      if (a.type === "stay") { exposed.add(pid); continue; }
+      if (a.type !== "move") continue;
+      const p = this.players.get(pid);
+      const from = p.pos, k = bkey(p.pos, a.target);
+      if (toRemove.has(k)) {
+        log.push(`${p.name} 坠桥身亡（${this.locName(from)}↔${this.locName(a.target)} 被拆）`);
+        killed(p, "fall"); continue;
+      }
+      const d = this.dur(p.pos, a.target);
+      if (d <= 0) {
+        log.push(`${p.name} 坠桥身亡（${this.locName(from)}↔${this.locName(a.target)} 已坍塌）`);
+        killed(p, "fall"); continue;
+      }
+      this.bridges.set(k, d - 1);
+      p.pos = a.target;
+    }
+
+    // 阶段4 猜杀（先手倒序）
+    const killedThisPhase = new Set();
+    for (const pid of order.slice().reverse()) {
+      if (killedThisPhase.has(pid)) continue;
+      const a = act[pid];
+      if (a.type !== "guess") continue;
+      const shooter = this.players.get(pid), target = this.players.get(a.target);
+      if (target.pos === a.loc) {
+        log.push(`${shooter.name} 在 ${this.locName(a.loc)} 猜中并击杀了 ${target.name}`);
+        killed(target, "guess"); killedThisPhase.add(target.pid);
+      } else {
+        log.push(`${shooter.name} 猜错，自己死亡`);
+        killed(shooter, "miss"); killedThisPhase.add(shooter.pid);
+      }
+    }
+
+    // 阶段5 连通性死亡
+    this._connectivityDeaths(r, log, killed);
+
+    // 阶段5.5 反僵持
+    for (const pid of order) {
+      const p = this.players.get(pid);
+      if (!p.alive) continue;
+      if (exposed.has(pid)) {
+        p.stayStreak += 1;
+        if (p.stayStreak >= 2) { log.push(`${p.name} 连续两回合不动，力竭而亡`); killed(p, "idle"); }
+      } else p.stayStreak = 0;
+    }
+
+    // 阶段6 雷达（结算完成后读取人数）
+    const radarResults = new Map();
+    for (const [pid, loc] of radarReq) {
+      const cnt = this.alivePlayers().filter(q => q.pos === loc).length;
+      radarResults.set(pid, { loc, count: cnt });
+    }
+    this.lastRadar = radarResults;
+
+    // 公开事件（只公布动作，不公布边）
+    const prefix = [];
+    if (builders.length) prefix.push(`本轮建桥：${builders.join("、")}`);
+    if (demolishers.length) prefix.push(`本轮拆桥：${demolishers.join("、")}`);
+    for (const pid of order) {
+      if (exposed.has(pid) && this.players.get(pid).alive) {
+        const p = this.players.get(pid);
+        log.push(`${p.name} 暴露位置：${this.locName(p.pos)}`);
+        this.lastExposed.set(pid, p.pos);
+      }
+    }
+
+    this._checkEnd(log, r);
+    if (!this.finished && this.round >= MAX_ROUNDS) {
+      this.finished = true; this.winner = null;
+      log.push(`已达回合上限（${MAX_ROUNDS} 轮），对局判为平局。`);
+    }
+    this.lastDeaths = deaths;
+
+    const full = prefix.concat(log);
+    this.history.push({ round: r, log: full, alive: this.alivePlayers().map(p => p.name) });
+    return full;
+  }
+
+  _connectivityDeaths(r, log, killed) {
+    for (const p of this.alivePlayers().slice()) {
+      if (this.neighbors(p.pos).length === 0) {
+        log.push(`${p.name} 因所在地 ${this.locName(p.pos)} 与外界断连而死`);
+        killed(p, "isolated");
+      }
+    }
+    const survivors = this.alivePlayers();
+    if (survivors.length <= 1) return;
+    const blocks = [];
+    for (const cellSet of this._components()) {
+      const members = survivors.filter(p => cellSet.has(p.pos));
+      if (members.length) blocks.push({ cellSet, members });
+    }
+    if (blocks.length <= 1) return;
+    const rank = b => [b.members.length, b.cellSet.size, b.cellSet.has(CENTER) ? 1 : 0];
+    const keys = blocks.map(rank);
+    const best = keys.reduce((a, k) => {
+      for (let i = 0; i < 3; i++) { if (k[i] !== a[i]) return k[i] > a[i] ? k : a; }
+      return a;
+    }, keys[0]);
+    blocks.forEach((b, i) => {
+      const k = keys[i];
+      if (k[0] === best[0] && k[1] === best[1] && k[2] === best[2]) return;
+      for (const p of b.members) { log.push(`${p.name} 所在区块在地图分割中落于弱势，全灭`); killed(p, "split"); }
+    });
+  }
+
+  _components() {
+    const adj = new Map();
+    this.locations.forEach(l => adj.set(l, new Set()));
+    for (const [k, d] of this.bridges) {
+      if (d <= 0) continue;
+      const parts = k.split("-").map(Number);
+      adj.get(parts[0]).add(parts[1]); adj.get(parts[1]).add(parts[0]);
+    }
+    const seen = new Set(), comps = [];
+    for (const start of this.locations) {
+      if (seen.has(start)) continue;
+      const stack = [start], comp = new Set();
+      while (stack.length) {
+        const x = stack.pop();
+        if (seen.has(x)) continue;
+        seen.add(x); comp.add(x);
+        adj.get(x).forEach(y => { if (!seen.has(y)) stack.push(y); });
+      }
+      comps.push(comp);
+    }
+    return comps;
+  }
+
+  _checkEnd(log, r) {
+    const alive = this.alivePlayers();
+    if (alive.length === 1) {
+      this.finished = true; this.winner = alive[0].pid;
+      log.push(`游戏结束：${alive[0].name} 获胜！`);
+    } else if (alive.length === 0) {
+      this.finished = true; this.winner = null;
+      log.push("游戏结束：全员阵亡，平局。");
+    }
+  }
+
+  publicBridges() {
+    const out = [];
+    for (const [k, d] of this.bridges) {
+      if (d <= 0) continue;
+      const parts = k.split("-").map(Number);
+      out.push({ a: this.locName(Math.min(parts[0], parts[1])), b: this.locName(Math.max(parts[0], parts[1])), dur: d });
+    }
+    return out;
+  }
+}
+
+/* =====================================================================
+   二、电脑对手：纯本地规则推理（位置信念追踪 + 启发式决策）
+   —— 不联网、不调用任何模型，全部逻辑就在下面这段代码里。
+   ===================================================================== */
+const BOT_NAMES = ["桥影", "渡鸦", "沉舟", "白鹭", "孤帆", "寒江", "暮雪", "远舟"];
+
+class Bot {
+  constructor(pid, difficulty) {
+    this.pid = pid; this.diff = difficulty;
+    this.belief = new Map();     // 对手 pid -> 可能所在地集合
+  }
+  init(game) {
+    const mine = game.players.get(this.pid).pos;
+    for (const p of game.players.values()) {
+      if (p.pid === this.pid) continue;
+      // 开局一人一基地：对手只可能在其他基地上
+      this.belief.set(p.pid, new Set(game.locations.filter(l => l !== mine && l !== CENTER)));
+    }
+  }
+  /* 用公开信息更新信念。preBridges = 本轮开始前的桥况快照 */
+  observe(game, exposedMap, preBridges) {
+    const preNb = loc => {
+      const res = [];
+      for (const [k, d] of preBridges) {
+        if (d <= 0) continue;
+        const parts = k.split("-").map(Number);
+        if (parts[0] === loc) res.push(parts[1]);
+        else if (parts[1] === loc) res.push(parts[0]);
+      }
+      return res;
+    };
+    for (const p of game.players.values()) {
+      if (p.pid === this.pid) continue;
+      if (!p.alive) { this.belief.delete(p.pid); continue; }
+      if (exposedMap.has(p.pid)) { this.belief.set(p.pid, new Set([exposedMap.get(p.pid)])); continue; }
+      const cur = this.belief.get(p.pid) || new Set();
+      const next = new Set(cur);
+      cur.forEach(c => preNb(c).forEach(n => next.add(n)));
+      this.belief.set(p.pid, next);
+    }
+  }
+  /* 雷达结果用于收窄信念 */
+  useRadar(loc, count, game) {
+    if (count === 0) {
+      for (const [pid, s] of this.belief) { s.delete(loc); }
+      return;
+    }
+    let holders = [];
+    for (const [pid, s] of this.belief) if (s.has(loc)) holders.push([pid, s]);
+    if (count === 1 && holders.length >= 1) {
+      // 无法确定是谁，但可以删掉其它候选：对每个 holder 保留 loc 是"可能"的
+      // 保守做法：对所有人，如果其候选集只包含 loc 与其它不可能地点，收窄为 loc 的概率上升
+      // 简化：若某人的候选集大小>1，保留；否则不动
+    }
+    if (holders.length === count) {
+      // 恰好这些人都可能在那里 -> 不能排除，但可排除其他人
+    }
+  }
+
+  decide(game) {
+    const me = game.players.get(this.pid);
+    if (!me || !me.alive || game.finished) return { action: { type: "stay" }, radar: null };
+    const la = game.legalActions(this.pid);
+    const R = () => Math.random();
+    const noise = this.diff === "easy" ? 0.45 : this.diff === "normal" ? 0.2 : 0.05;
+    const conf = this.diff === "easy" ? 1 : this.diff === "normal" ? 2 : 3;
+
+    // 雷达选择：在 C 时探测信念最集中的基地
+    let radar = null;
+    if (la.canRadar) {
+      let bestLoc = null, bestScore = -1;
+      for (const b of la.radarTargets) {
+        let sc = 0;
+        for (const [, s] of this.belief) if (s.has(b)) sc += 1 / s.size;
+        if (sc > bestScore) { bestScore = sc; bestLoc = b; }
+      }
+      if (bestLoc !== null) radar = bestLoc;
+    }
+
+    // 保命优先：所在地已无任何桥（会在结算时孤立死）-> 必须建桥
+    if (game.neighbors(me.pos).length === 0) {
+      if (la.canBuild && la.buildTargets.length) return { action: { type: "build", target: pick(la.buildTargets) }, radar };
+      if (la.moveTargets.length) return { action: { type: "move", target: pick(la.moveTargets) }, radar };
+    }
+
+    // 1) 高置信度猜杀
+    if (la.guessTargets.length && R() > noise) {
+      let cand = null;
+      for (const t of la.guessTargets) {
+        const s = this.belief.get(t);
+        if (!s || s.size === 0) continue;
+        if (s.size <= conf) {
+          for (const loc of s) {
+            if (la.guessLocs.indexOf(loc) >= 0) { cand = { target: t, loc }; break; }
+          }
+        }
+        if (cand) break;
+      }
+      // 只在"几乎确定"时才开枪，避免自杀
+      if (cand) {
+        const s = this.belief.get(cand.target);
+        const certainty = 1 / s.size;
+        const need = this.diff === "easy" ? 0.95 : this.diff === "normal" ? 0.5 : 0.34;
+        if (certainty >= need) return { action: { type: "guess", target: cand.target, loc: cand.loc }, radar };
+      }
+    }
+
+    // 2) 拆桥断退路（本游戏核心杀招）
+    if (la.canDemolish && R() > noise) {
+      // 2a) 我在中心岛：拆掉「我怀疑有人在的基地」唯一的那座桥 -> 对方孤立死/坠桥
+      if (me.pos === CENTER) {
+        let best = null, bestSc = 0;
+        for (const b of la.demolishTargets) {
+          if (game.dur(CENTER, b) <= 0) continue;
+          let sc = 0;
+          for (const [, s] of this.belief) if (s.has(b)) sc += 1 / s.size;
+          // 该基地是否只剩这一座桥（拆了就孤立）
+          const others = game.neighbors(b).filter(n => n !== CENTER);
+          const bonus = others.length === 0 ? 2.0 : 1.0;
+          sc *= bonus;
+          if (sc > bestSc) { bestSc = sc; best = b; }
+        }
+        if (best !== null && bestSc >= (this.diff === "hard" ? 0.4 : 0.8))
+          return { action: { type: "demolish", target: best }, radar };
+      }
+      // 2b) 我在基地：拆掉「通往我怀疑有人在的地点」的桥
+      let best = null, bestSc = 0;
+      for (const l of la.demolishTargets) {
+        if (game.dur(me.pos, l) <= 0) continue;
+        let sc = 0;
+        for (const [, s] of this.belief) if (s.has(l)) sc += 1 / s.size;
+        if (sc > bestSc) { bestSc = sc; best = l; }
+      }
+      if (best !== null && bestSc >= (this.diff === "hard" ? 0.6 : 1.1))
+        return { action: { type: "demolish", target: best }, radar };
+    }
+
+    // 3) 移动：优先抢中心岛（在 C 能拆任意基地的桥、还能用雷达）
+    if (la.moveTargets.length) {
+      const dangerBridge = la.moveTargets.map(t => game.dur(me.pos, t));
+      const toCenter = la.moveTargets.indexOf(CENTER) >= 0;
+      const risky = me.seat > 0 && dangerBridge.some(d => d <= 1);
+      if (toCenter && R() > noise * 0.5)
+        return { action: { type: "move", target: CENTER }, radar };
+      // 待在自己基地、且桥快塌 -> 撤
+      const myBridges = game.neighbors(me.pos);
+      if (me.pos !== CENTER && myBridges.length && !risky && R() > 0.35)
+        return { action: { type: "move", target: pick(la.moveTargets) }, radar };
+    }
+
+    // 4) 建桥：扩张 / 备用退路
+    if (la.canBuild && la.buildTargets.length && R() > 0.45)
+      return { action: { type: "build", target: pick(la.buildTargets) }, radar };
+
+    // 5) 不动（只在安全时）
+    if (me.stayStreak === 0 && R() > 0.4) return { action: { type: "stay" }, radar };
+
+    // 6) 兜底：找一个合法行动，绝不因无从选择而白送
+    if (la.canBuild && la.buildTargets.length) return { action: { type: "build", target: pick(la.buildTargets) }, radar };
+    if (la.moveTargets.length) return { action: { type: "move", target: pick(la.moveTargets) }, radar };
+    if (la.canDemolish && la.demolishTargets.length) return { action: { type: "demolish", target: pick(la.demolishTargets) }, radar };
+    return { action: { type: "stay" }, radar };
+  }
+}
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+/* =====================================================================
+   三、界面
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+let game = null, bots = new Map(), myPid = 0, sel = { type: null, target: null, loc: null, guessTarget: null, radar: null };
+let publicKnown = new Map();   // 公开可确认的位置（暴露 / 死亡地点）
+let logLines = [];
+
+const L = { build: "建桥", move: "移动", demolish: "拆桥", guess: "猜杀", stay: "不动" };
+const REASON = { fall: "坠桥", guess: "被猜杀", miss: "猜错自杀", isolated: "孤立死", split: "分割全灭", idle: "力竭" };
+const locName = id => (id === CENTER ? "C" : "B" + id);
+
+function startGame() {
+  const n = parseInt($("numPlayers").value, 10);
+  const diff = $("difficulty").value;
+  const myName = ($("nameInput").value.trim() || "玩家").slice(0, 12);
+
+  // 先手序 = 座次：玩家随机插入某一席
+  const mySeat = Math.floor(Math.random() * n);
+  const infos = [];
+  let botIdx = 0, nextPid = 1;
+  for (let seat = 0; seat < n; seat++) {
+    if (seat === mySeat) infos.push([0, myName]);
+    else infos.push([nextPid++, BOT_NAMES[botIdx++ % BOT_NAMES.length]]);
+  }
+  myPid = 0;
+  game = new Game(infos);
+  bots = new Map();
+  publicKnown = new Map();
+  logLines = [];
+  $("logBox").innerHTML = "";
+  for (const p of game.players.values()) {
+    if (p.pid === myPid) continue;
+    const b = new Bot(p.pid, diff);
+    b.init(game);
+    bots.set(p.pid, b);
+  }
+  addLog(`对局开始：${n} 人。先手序 ${infos.map(i => i[1]).join(" → ")}（你的座次 P${mySeat + 1}）。`);
+  addLog("所有人起始各占一个基地，位置保密。");
+  $("setup").classList.add("hidden");
+  $("game").classList.remove("hidden");
+  render();
+}
+
+/* 一轮推进：玩家行动 + 所有电脑同时决定 -> 统一结算 */
+function playRound(myAction, myRadar) {
+  const actions = {}, radars = {};
+  actions[myPid] = myAction;
+  if (myRadar !== null && myRadar !== undefined) radars[myPid] = myRadar;
+
+  const preBridges = new Map(game.bridges);
+  for (const [pid, bot] of bots) {
+    const d = bot.decide(game);
+    actions[pid] = d.action;
+    if (d.radar !== null && d.radar !== undefined) radars[pid] = d.radar;
+  }
+
+  const lines = game.resolve(actions, radars);
+  // 公开信息 -> 玩家自己的已知位置表
+  for (const [pid, loc] of game.lastExposed) publicKnown.set(pid, { loc, round: game.round });
+  for (const d of game.lastDeaths) {
+    const p = game.players.get(d.pid);
+    if (p && p.pos !== null) publicKnown.set(d.pid, { loc: p.pos, round: game.round, dead: true });
+  }
+  // 电脑们更新信念
+  for (const [, bot] of bots) {
+    bot.observe(game, game.lastExposed, preBridges);
+    for (const [pid, res] of game.lastRadar) if (pid === bot.pid) bot.useRadar(res.loc, res.count, game);
+  }
+  // 雷达结果展示
+  const rr = game.lastRadar.get(myPid);
+  $("radarResult").textContent = rr ? `📡 上一轮雷达：${locName(rr.loc)} 有 ${rr.count} 人` : "";
+
+  lines.forEach(l => addLog(l));
+  render();
+}
+
+function addLog(text) {
+  logLines.push(text);
+  if (logLines.length > 400) logLines = logLines.slice(-400);
+  const box = $("logBox");
+  [...box.children].forEach(c => c.classList.remove("fresh"));
+  const div = document.createElement("div");
+  div.textContent = text;
+  div.className = "fresh" + (/游戏结束/.test(text) ? " big" : "");
+  box.appendChild(div);
+  while (box.children.length > 400) box.removeChild(box.firstChild);
+  box.scrollTop = box.scrollHeight;
+}
+
+/* ---------------- 渲染 ---------------- */
+function render() {
+  if (!game) return;
+  $("roundNum").textContent = game.round;
+  const me = game.players.get(myPid);
+
+  // 横幅
+  const b = $("banner");
+  if (game.finished) {
+    b.classList.remove("hidden");
+    if (game.winner === myPid) b.textContent = "🎉 你是最后的幸存者，获胜！";
+    else if (game.winner === null) b.textContent = "对局结束：平局（全员阵亡或达回合上限）";
+    else b.textContent = `对局结束：${game.players.get(game.winner).name} 获胜`;
+  } else if (!me.alive) {
+    b.classList.remove("hidden");
+    b.textContent = "你已阵亡 —— 旁观模式";
+  } else b.classList.add("hidden");
+
+  // 地图
+  drawMap();
+
+  // 桥
+  const bb = $("bridgesBox");
+  bb.innerHTML = "";
+  const bl = game.publicBridges();
+  if (!bl.length) bb.textContent = "（当前无任何可用桥 —— 所有地点相互孤立）";
+  bl.forEach(br => {
+    const s = document.createElement("span");
+    if (br.dur <= 1) s.className = "d1";
+    s.textContent = `${br.a}↔${br.b} 耐久${br.dur}`;
+    bb.appendChild(s);
+  });
+
+  // 玩家列表
+  const pl = $("gamePlist");
+  pl.innerHTML = "";
+  const sorted = [...game.players.values()].sort((x, y) => x.seat - y.seat);
+  sorted.forEach(p => {
+    const div = document.createElement("div");
+    const cls = !p.alive ? "dead" : (p.pid === myPid ? "me" : "");
+    const known = publicKnown.get(p.pid);
+    const ktag = known ? `<span class="tag ${known.dead ? "k" : "s"}">${known.dead ? "死亡地点" : "公开"} ${locName(known.loc)}</span>` : "";
+    const reason = (!p.alive && p.deathReason) ? `（${REASON[p.deathReason] || p.deathReason}·R${p.deathRound}）` : "";
+    div.innerHTML = `<span class="${cls}">P${p.seat + 1} ${esc(p.name)}${p.pid === myPid ? " (我)" : ""}${p.alive ? "" : " ☠" + reason}</span>`
+      + `<span class="seat">${ktag}</span>`;
+    pl.appendChild(div);
+  });
+
+  renderPanel();
+}
+
+function renderPanel() {
+  const me = game.players.get(myPid);
+  const info = $("myInfo");
+  const spectate = $("spectateBtn");
+
+  if (!me.alive) {
+    info.innerHTML = `<span class="dead">你已阵亡。</span>`;
+    $("actBtns").innerHTML = ""; $("actParams").innerHTML = "";
+    $("radarBox").classList.add("hidden"); $("submitBtn").classList.add("hidden");
+    spectate.classList.toggle("hidden", game.finished);
+    return;
+  }
+  info.innerHTML = `我的位置：<b>${locName(me.pos)}</b>${me.stayStreak > 0 ? '　<span class="tag k">上轮未动，再不动就力竭</span>' : ""}`;
+  spectate.classList.add("hidden");
+  if (game.finished) {
+    $("actBtns").innerHTML = ""; $("actParams").innerHTML = "";
+    $("radarBox").classList.add("hidden"); $("submitBtn").classList.add("hidden");
+    return;
+  }
+  $("submitBtn").classList.remove("hidden");
+  buildActionButtons(game.legalActions(myPid));
+  buildRadarPicker(game.legalActions(myPid));
+}
+
+function buildRadarPicker(legal) {
+  const box = $("radarBox");
+  if (!legal.canRadar) { box.classList.add("hidden"); sel.radar = null; return; }
+  box.classList.remove("hidden");
+  const pp = $("radarParam");
+  pp.innerHTML = "";
+  const s = document.createElement("select");
+  const none = document.createElement("option");
+  none.value = ""; none.textContent = "不使用雷达";
+  s.appendChild(none);
+  legal.radarTargets.forEach(l => {
+    const o = document.createElement("option");
+    o.value = l; o.textContent = "探测 " + locName(l);
+    s.appendChild(o);
+  });
+  s.onchange = () => { sel.radar = s.value === "" ? null : parseInt(s.value, 10); };
+  pp.appendChild(s);
+}
+
+function buildActionButtons(legal) {
+  const keepRadar = sel.radar;
+  sel = { type: null, target: null, loc: null, guessTarget: null, radar: keepRadar };
+  const box = $("actBtns");
+  box.innerHTML = "";
+  const avail = [];
+  if (legal.canBuild && legal.buildTargets.length) avail.push("build");
+  if (legal.moveTargets.length) avail.push("move");
+  if (legal.canDemolish) avail.push("demolish");
+  if (legal.guessTargets.length) avail.push("guess");
+  avail.push("stay");
+  avail.forEach(t => {
+    const btn = document.createElement("button");
+    btn.textContent = L[t];
+    btn.onclick = () => chooseAction(t, legal, btn);
+    box.appendChild(btn);
+  });
+  $("actParams").innerHTML = "";
+  $("submitBtn").disabled = true;
+}
+
+function pName(pid) { const p = game.players.get(pid); return p ? p.name : String(pid); }
+
+function chooseAction(t, legal, btn) {
+  const keepRadar = sel.radar;
+  sel = { type: t, target: null, loc: null, guessTarget: null, radar: keepRadar };
+  [...$("actBtns").children].forEach(x => x.classList.remove("sel"));
+  btn.classList.add("sel");
+  const pp = $("actParams");
+  pp.innerHTML = "";
+  const mkSelect = (labelText, opts, onch) => {
+    const lab = document.createElement("label");
+    lab.style.minWidth = "0";
+    lab.textContent = labelText + " ";
+    const s = document.createElement("select");
+    const ph = document.createElement("option");
+    ph.value = ""; ph.textContent = "请选择";
+    s.appendChild(ph);
+    opts.forEach(o => {
+      const op = document.createElement("option");
+      op.value = o.v; op.textContent = o.t;
+      s.appendChild(op);
+    });
+    s.onchange = () => onch(s.value);
+    lab.appendChild(s);
+    const wrap = document.createElement("div");
+    wrap.className = "row";
+    wrap.appendChild(lab);
+    pp.appendChild(wrap);
+    return s;
+  };
+  const mark = v => (v === "" ? null : parseInt(v, 10));
+  if (t === "stay") { $("submitBtn").disabled = false; return; }
+  if (t === "build") mkSelect("建到：", legal.buildTargets.map(l => ({ v: l, t: locName(l) })), v => { sel.target = mark(v); chk(); });
+  else if (t === "move") mkSelect("移动到：", legal.moveTargets.map(l => ({ v: l, t: locName(l) + `（耐久 ${game.dur(game.players.get(myPid).pos, l)}）` })), v => { sel.target = mark(v); chk(); });
+  else if (t === "demolish") mkSelect("拆「我 ↔ 某地」的桥：", legal.demolishTargets.map(l => ({
+    v: l, t: locName(l) + (game.dur(game.players.get(myPid).pos, l) > 0 ? "（桥存在）" : "（此处无桥·落空转不动）")
+  })), v => { sel.target = mark(v); chk(); });
+  else if (t === "guess") {
+    mkSelect("猜谁：", legal.guessTargets.map(pid => ({ v: pid, t: pName(pid) })), v => { sel.guessTarget = mark(v); chk(); });
+    mkSelect("在哪个地点：", legal.guessLocs.map(l => ({ v: l, t: locName(l) })), v => { sel.loc = mark(v); chk(); });
+  }
+  chk();
+}
+
+function chk() {
+  let ok = false;
+  if (sel.type === "stay") ok = true;
+  else if (sel.type === "guess") ok = (sel.guessTarget !== null && sel.loc !== null);
+  else ok = (sel.target !== null && !Number.isNaN(sel.target));
+  $("submitBtn").disabled = !ok;
+}
+
+function submitMove() {
+  let action;
+  if (sel.type === "stay") action = { type: "stay" };
+  else if (sel.type === "guess") action = { type: "guess", loc: sel.loc, target: sel.guessTarget };
+  else action = { type: sel.type, target: sel.target };
+  $("submitBtn").disabled = true;
+  playRound(action, sel.radar);
+}
+
+/* 星形图 */
+function drawMap() {
+  const svg = $("mapSvg");
+  const cx = 160, cy = 160, R = 112;
+  const bases = game.locations.filter(l => l !== CENTER);
+  const pos = { "C": { x: cx, y: cy } };
+  bases.forEach((id, i) => {
+    const ang = -Math.PI / 2 + i * 2 * Math.PI / bases.length;
+    pos["B" + id] = { x: cx + R * Math.cos(ang), y: cy + R * Math.sin(ang) };
+  });
+  const me = game.players.get(myPid);
+  const myLoc = me ? me.pos : null;
+  let s = "";
+  game.publicBridges().forEach(br => {
+    const a = pos[br.a], b = pos[br.b];
+    if (!a || !b) return;
+    const col = br.dur >= 2 ? "#5865f2" : "#c98b2e";
+    let mx, my;
+    if (br.a === "C" || br.b === "C") {
+      s += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="3"/>`;
+      mx = (a.x + b.x) / 2; my = (a.y + b.y) / 2;
+    } else {
+      const midx = (a.x + b.x) / 2, midy = (a.y + b.y) / 2;
+      let dx = midx - cx, dy = midy - cy;
+      const len = Math.hypot(dx, dy) || 1;
+      const pushAmt = 52;
+      const ctrlx = midx + dx / len * pushAmt, ctrly = midy + dy / len * pushAmt;
+      s += `<path d="M${a.x},${a.y} Q${ctrlx},${ctrly} ${b.x},${b.y}" fill="none" stroke="${col}" stroke-width="3"/>`;
+      mx = 0.25 * a.x + 0.5 * ctrlx + 0.25 * b.x;
+      my = 0.25 * a.y + 0.5 * ctrly + 0.25 * b.y;
+    }
+    s += `<circle cx="${mx}" cy="${my}" r="9" fill="#0f1226" stroke="${col}"/>`;
+    s += `<text x="${mx}" y="${my + 4}" fill="#e8ebff" font-size="11" text-anchor="middle">${br.dur}</text>`;
+  });
+  Object.keys(pos).forEach(name => {
+    const p = pos[name];
+    const isMe = (name === "C" ? CENTER : parseInt(name.slice(1), 10)) === myLoc;
+    const isCenter = name === "C";
+    const r = isCenter ? 26 : 21;
+    const fill = isMe ? "#35d07f" : (isCenter ? "#3a2a5a" : "#232848");
+    const stroke = isMe ? "#fff" : "#4a5488";
+    s += `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+    s += `<text x="${p.x}" y="${p.y + 5}" fill="#fff" font-size="14" font-weight="700" text-anchor="middle">${name}</text>`;
+    if (isMe) s += `<text x="${p.x}" y="${p.y - r - 4}" fill="#35d07f" font-size="11" text-anchor="middle">我</text>`;
+  });
+  svg.innerHTML = s;
+}
+
+function esc(s0) {
+  return String(s0).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* 旁观快进：电脑之间自动打完 */
+function fastForward() {
+  let guard = 0;
+  while (!game.finished && guard++ < 200) {
+    const actions = {}, radars = {};
+    const preBridges = new Map(game.bridges);
+    for (const [pid, bot] of bots) {
+      const d = bot.decide(game);
+      actions[pid] = d.action;
+      if (d.radar !== null && d.radar !== undefined) radars[pid] = d.radar;
+    }
+    const lines = game.resolve(actions, radars);
+    for (const [pid, loc] of game.lastExposed) publicKnown.set(pid, { loc, round: game.round });
+    for (const d of game.lastDeaths) {
+      const p = game.players.get(d.pid);
+      if (p) publicKnown.set(d.pid, { loc: p.pos, round: game.round, dead: true });
+    }
+    for (const [, bot] of bots) bot.observe(game, game.lastExposed, preBridges);
+    lines.forEach(l => addLog(l));
+  }
+  render();
+}
+
+$("startBtn").onclick = startGame;
+$("submitBtn").onclick = submitMove;
+$("spectateBtn").onclick = fastForward;
+$("nameInput").addEventListener("keydown", e => { if (e.key === "Enter") startGame(); });
+</script>
+</body>
+</html>

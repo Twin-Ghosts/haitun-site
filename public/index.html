@@ -1,174 +1,76 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>按钮计数器</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>游戏列表 · cryv.tz.kg</title>
+<meta name="description" content="纯前端小游戏合集，打开即玩，无需注册与联网。">
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: dark; --bg:#0f1226; --card:#171b34; --line:#2a2f52; --fg:#e8ebff;
+          --muted:#9aa0c8; --accent:#7c8cff; --hot:#ff6b8a; --gold:#ffd27a; --ok:#35d07f; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body {
-    margin: 0; min-height: 100vh; display: grid; place-items: center;
-    font: 16px/1.65 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
-    background: radial-gradient(1200px 600px at 50% -10%, #16233d 0%, #0b1220 60%);
-    color: #e6edf7; padding: 24px;
-  }
-  .card {
-    width: min(560px, 100%); background: #111c30; border: 1px solid #1f2f4d;
-    border-radius: 18px; padding: 30px 32px 26px; box-shadow: 0 18px 50px rgba(0,0,0,.5);
-    text-align: center;
-  }
-  .badge {
-    display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px;
-    color: #8ba3c7; background: rgba(139,163,199,.10); border: 1px solid #23344f;
-    padding: 5px 12px; border-radius: 999px; max-width: 100%;
-  }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #5ce1a0; flex: 0 0 auto;
-         box-shadow: 0 0 0 4px rgba(92,225,160,.14); }
-  .host { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: #cfe0f5;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  h1 { margin: 20px 0 4px; font-size: 23px; letter-spacing: .01em; }
-  .sub { color: #8ba3c7; font-size: 14px; margin: 0 0 22px; }
-
-  .num {
-    font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: clamp(64px, 20vw, 104px); font-weight: 700; line-height: 1; color: #eaf2ff;
-    padding: 18px 0 6px; text-shadow: 0 0 42px rgba(96,165,250,.35);
-    transition: transform .12s cubic-bezier(.2,.9,.3,1.4), color .12s;
-  }
-  .num.pop { transform: scale(1.09); color: #9fd0ff; }
-  .num.reset { color: #8ba3c7; }
-  .label { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: #7d92b3; }
-
-  .actions { display: flex; gap: 12px; justify-content: center; margin: 26px 0 0; flex-wrap: wrap; }
-  button {
-    font: inherit; cursor: pointer; border-radius: 12px; border: 1px solid transparent;
-    transition: transform .08s, background .15s, border-color .15s, opacity .15s;
-  }
-  button:active { transform: translateY(1px) scale(.99); }
-  .primary {
-    flex: 1 1 190px; min-height: 62px; font-size: 20px; font-weight: 650; letter-spacing: .02em;
-    background: linear-gradient(180deg, #3b82f6, #2563eb); color: #fff;
-    box-shadow: 0 10px 24px rgba(37,99,235,.35);
-  }
-  .primary:hover { background: linear-gradient(180deg, #4c92ff, #2f6ff0); }
-  .ghost {
-    flex: 0 0 auto; min-height: 62px; padding: 0 20px; font-size: 14px; color: #8ba3c7;
-    background: transparent; border-color: #23344f;
-  }
-  .ghost:hover { color: #cfe0f5; border-color: #33507c; }
-  button:focus-visible { outline: 2px solid #9fd0ff; outline-offset: 2px; }
-
-  .hint { margin: 24px 0 0; padding-top: 18px; border-top: 1px solid #1f2f4d;
-          font-size: 13px; color: #7d92b3; text-align: left; }
-  .hint code { background: #0b1220; padding: 2px 6px; border-radius: 5px; color: #9fd0ff; font-size: 12.5px; }
-  .warn { color: #f0c674; }
-  @media (prefers-reduced-motion: reduce) { .num { transition: none; } }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { max-width:760px; margin:0 auto; padding:40px 18px 60px; }
+  header { text-align:center; margin-bottom:34px; }
+  h1 { font-size:28px; margin:0 0 6px; letter-spacing:3px; }
+  .sub { color:var(--muted); font-size:13.5px; }
+  .sec { font-size:13px; color:var(--muted); letter-spacing:1px; margin:30px 0 12px; }
+  .list { display:flex; flex-direction:column; gap:12px; }
+  .item { display:flex; align-items:center; gap:16px; background:var(--card);
+          border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+          text-decoration:none; color:inherit; transition:transform .12s, border-color .12s; }
+  a.item:hover { transform:translateY(-2px); border-color:var(--accent); }
+  .idx { font-size:22px; font-weight:800; color:var(--accent); min-width:34px; text-align:center; }
+  .meta { flex:1; min-width:0; }
+  .name { font-weight:700; font-size:16.5px; margin-bottom:3px; }
+  .desc { font-size:13px; color:var(--muted); }
+  .go { font-size:13px; color:var(--accent); font-weight:600; white-space:nowrap; }
+  .item.disabled { opacity:.45; }
+  .item.disabled .go { color:var(--muted); }
+  .tag { display:inline-block; padding:1px 8px; border-radius:20px; font-size:11px;
+         font-weight:700; margin-left:8px; vertical-align:1px; }
+  .tag.hot { background:#301420; color:var(--hot); }
+  .tag.new { background:#14301f; color:var(--ok); }
+  footer { margin-top:40px; text-align:center; font-size:12.5px; color:var(--muted); line-height:2; }
 </style>
 </head>
 <body>
-<main class="card">
-  <div class="badge"><span class="dot"></span><span class="host" id="host">读取中…</span></div>
+<div class="wrap">
+  <header>
+    <h1>游戏列表</h1>
+    <div class="sub">纯前端小游戏 · 打开即玩 · 无需注册、无需联网</div>
+  </header>
 
-  <h1>按钮计数器</h1>
-  <p class="sub">点一下按钮，数字加一。</p>
-
-  <div class="num" id="count">0</div>
-  <div class="label">累计点击</div>
-
-  <div class="actions">
-    <button class="primary" id="inc" type="button">＋1</button>
-    <button class="ghost" id="reset" type="button">重置</button>
+  <div class="sec">游戏（1）</div>
+  <div class="list">
+    <a class="item" href="games/guohechaiqiao/index.html">
+      <div class="idx">1</div>
+      <div class="meta">
+        <div class="name">过河拆桥<span class="tag new">NEW</span></div>
+        <div class="desc">星形地图上的暗选博弈：建桥 / 移动 / 拆桥 / 猜杀 / 不动。
+          拆掉对手唯一的退路——他留下就孤立死，正过桥就坠桥身亡。</div>
+      </div>
+      <div class="go">开始 ▶</div>
+    </a>
   </div>
 
-  <p class="hint">
-    计数保存在<b>本机浏览器</b>里（<code>localStorage</code>）：刷新、关掉再打开都还在；
-    换设备或换浏览器则是各自独立的一份；清除浏览器数据会归零。<br>
-    键盘按 <code>空格</code> 或 <code>回车</code> 也能加一 —— 前提是焦点不在「重置」上。
-  </p>
-</main>
+  <div class="sec">小工具</div>
+  <div class="list">
+    <a class="item" href="tools/counter/index.html">
+      <div class="idx">·</div>
+      <div class="meta">
+        <div class="name">按钮计数器</div>
+        <div class="desc">点「＋1」计数，支持空格/回车、多标签同步、localStorage 本地保存。</div>
+      </div>
+      <div class="go">打开 ▶</div>
+    </a>
+  </div>
 
-<script>
-(function () {
-  'use strict';
-
-  var KEY = 'cryv888moe.counter.v1';
-
-  // localStorage 不是处处可用：隐私模式、被策略禁用、或配额满时会抛异常。
-  // 这种情况下退化成「本次打开期间有效」的内存计数，而不是让页面直接崩掉。
-  var store = (function () {
-    try {
-      var t = '__probe__';
-      window.localStorage.setItem(t, '1');
-      window.localStorage.removeItem(t);
-      return { durable: true,
-               get: function (k) { return window.localStorage.getItem(k); },
-               set: function (k, v) { window.localStorage.setItem(k, v); },
-               del: function (k) { window.localStorage.removeItem(k); } };
-    } catch (e) {
-      var mem = {};
-      return { durable: false,
-               get: function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; },
-               set: function (k, v) { mem[k] = v; },
-               del: function (k) { delete mem[k]; } };
-    }
-  })();
-
-  var el = document.getElementById('count');
-  var inc = document.getElementById('inc');
-  var reset = document.getElementById('reset');
-  var host = document.getElementById('host');
-  var n = read();
-
-  host.textContent = location.host || location.protocol.replace(':', '');
-  host.title = location.href;
-  paint();
-  if (!store.durable) {
-    var hint = document.querySelector('.hint');
-    hint.insertAdjacentHTML('afterbegin',
-      '<span class="warn">⚠ 浏览器禁止了本地存储，这个计数关掉页面就没了。</span><br>');
-  }
-
-  function read() {
-    var raw = store.get(KEY);
-    var v = parseInt(raw, 10);          // 非数字、空串、被改坏的值一律按 0 处理
-    return Number.isFinite(v) && v >= 0 ? v : 0;
-  }
-  function write() { store.set(KEY, String(n)); }
-  function paint(flash) {
-    el.textContent = n.toLocaleString('en-US');   // 千分位，位数多了也读得清
-    if (!flash) return;
-    el.classList.remove('pop');
-    void el.offsetWidth;                          // 强制重排，让动画能连续触发
-    el.classList.add('pop');
-    setTimeout(function () { el.classList.remove('pop'); }, 130);
-  }
-  function bump() { n += 1; write(); paint(true); }
-
-  inc.addEventListener('click', bump);
-
-  reset.addEventListener('click', function () {
-    if (n === 0 || !window.confirm('把计数从 ' + n.toLocaleString('en-US') + ' 归零？')) return;
-    n = 0; write(); paint();
-    el.classList.add('reset');
-    setTimeout(function () { el.classList.remove('reset'); }, 400);
-  });
-
-  // 空格/回车加一；焦点在按钮上时交给按钮自己处理，避免一次按键加两下。
-  document.addEventListener('keydown', function (e) {
-    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key !== ' ' && e.key !== 'Enter' && e.key !== 'Spacebar') return;
-    if (e.target && e.target.tagName === 'BUTTON') return;
-    e.preventDefault();
-    bump();
-  });
-
-  // 多标签页共用同一个 localStorage：别一个标签加了另一个还显示旧值。
-  window.addEventListener('storage', function (e) {
-    if (e.key !== KEY) return;
-    n = read(); paint();
-  });
-})();
-</script>
+  <footer>
+    站点内容为纯静态文件，本地运行，不收集也不上传任何数据。<br>
+    更多游戏会陆续加到这个列表里。
+  </footer>
+</div>
 </body>
 </html>
