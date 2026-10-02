@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>游戏列表 · cryv.tz.kg</title>
-<meta name="description" content="纯前端小游戏合集，打开即玩，无需注册与联网。">
+<meta name="description" content="纯前端小游戏合集：打开即玩、无需注册；单机不联网，联机只经公共中继转发房间消息。">
 <style>
   :root { color-scheme: dark; --bg:#0f1226; --card:#171b34; --line:#2a2f52; --fg:#e8ebff;
           --muted:#9aa0c8; --accent:#7c8cff; --hot:#ff6b8a; --gold:#ffd27a; --ok:#35d07f; }
@@ -39,7 +39,7 @@
 <div class="wrap">
   <header>
     <h1>游戏列表</h1>
-    <div class="sub">纯前端小游戏 · 打开即玩 · 无需注册、无需联网</div>
+    <div class="sub">纯前端小游戏 · 打开即玩 · 无需注册；单机不联网，联机只经公共中继转发房间消息</div>
   </header>
 
   <div class="sec">游戏（1）</div>
@@ -47,9 +47,9 @@
     <a class="item" href="games/guohechaiqiao/index.html">
       <div class="idx">1</div>
       <div class="meta">
-        <div class="name">过河拆桥<span class="tag new">NEW</span></div>
+        <div class="name">过河拆桥<span class="tag new">单机 / 联机</span></div>
         <div class="desc">星形地图上的暗选博弈：建桥 / 移动 / 拆桥 / 猜杀 / 不动。
-          拆掉对手唯一的退路——他留下就孤立死，正过桥就坠桥身亡。</div>
+          拆掉对手唯一的退路——他留下就孤立死，正过桥就坠桥身亡。可单机打电脑，也能建房号跟朋友同局。</div>
       </div>
       <div class="go">开始 ▶</div>
     </a>
@@ -68,7 +68,8 @@
   </div>
 
   <footer>
-    站点内容为纯静态文件，本地运行，不收集也不上传任何数据。<br>
+    站点内容为纯静态文件，运行在你的浏览器里，不收集也不上传任何数据。<br>
+    联机对局的消息经公共 MQTT 中继（broker.emqx.io）转发，不经过本站服务器。<br>
     更多游戏会陆续加到这个列表里。
   </footer>
 </div>
