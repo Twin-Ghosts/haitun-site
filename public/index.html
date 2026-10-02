@@ -3,60 +3,172 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>部署成功 · Render</title>
+<title>按钮计数器</title>
 <style>
-  :root { color-scheme: light dark; }
-  * { box-sizing: border-box; }
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0; min-height: 100vh; display: grid; place-items: center;
     font: 16px/1.65 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
-    background: #0b1220; color: #e6edf7; padding: 24px;
+    background: radial-gradient(1200px 600px at 50% -10%, #16233d 0%, #0b1220 60%);
+    color: #e6edf7; padding: 24px;
   }
   .card {
-    width: min(680px, 100%); background: #111c30; border: 1px solid #1f2f4d;
-    border-radius: 16px; padding: 32px 34px; box-shadow: 0 18px 50px rgba(0,0,0,.45);
+    width: min(560px, 100%); background: #111c30; border: 1px solid #1f2f4d;
+    border-radius: 18px; padding: 30px 32px 26px; box-shadow: 0 18px 50px rgba(0,0,0,.5);
+    text-align: center;
   }
-  h1 { margin: 0 0 6px; font-size: 24px; }
-  .sub { color: #8ba3c7; font-size: 14px; margin: 0 0 26px; }
-  .ok { display: inline-flex; align-items: center; gap: 8px; font-size: 13px;
-        color: #5ce1a0; background: rgba(92,225,160,.10); border: 1px solid rgba(92,225,160,.3);
-        padding: 5px 12px; border-radius: 999px; margin-bottom: 18px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #5ce1a0; }
-  dl { margin: 0; }
-  dt { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #7d92b3; margin-top: 18px; }
-  dd { margin: 4px 0 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-       font-size: 15px; color: #cfe0f5; word-break: break-all; }
-  .hint { margin-top: 30px; padding-top: 20px; border-top: 1px solid #1f2f4d;
-          font-size: 13.5px; color: #8ba3c7; }
-  code { background: #0b1220; padding: 2px 6px; border-radius: 5px; font-size: 13px; color: #9fd0ff; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px;
+    color: #8ba3c7; background: rgba(139,163,199,.10); border: 1px solid #23344f;
+    padding: 5px 12px; border-radius: 999px; max-width: 100%;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #5ce1a0; flex: 0 0 auto;
+         box-shadow: 0 0 0 4px rgba(92,225,160,.14); }
+  .host { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: #cfe0f5;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  h1 { margin: 20px 0 4px; font-size: 23px; letter-spacing: .01em; }
+  .sub { color: #8ba3c7; font-size: 14px; margin: 0 0 22px; }
+
+  .num {
+    font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: clamp(64px, 20vw, 104px); font-weight: 700; line-height: 1; color: #eaf2ff;
+    padding: 18px 0 6px; text-shadow: 0 0 42px rgba(96,165,250,.35);
+    transition: transform .12s cubic-bezier(.2,.9,.3,1.4), color .12s;
+  }
+  .num.pop { transform: scale(1.09); color: #9fd0ff; }
+  .num.reset { color: #8ba3c7; }
+  .label { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: #7d92b3; }
+
+  .actions { display: flex; gap: 12px; justify-content: center; margin: 26px 0 0; flex-wrap: wrap; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 12px; border: 1px solid transparent;
+    transition: transform .08s, background .15s, border-color .15s, opacity .15s;
+  }
+  button:active { transform: translateY(1px) scale(.99); }
+  .primary {
+    flex: 1 1 190px; min-height: 62px; font-size: 20px; font-weight: 650; letter-spacing: .02em;
+    background: linear-gradient(180deg, #3b82f6, #2563eb); color: #fff;
+    box-shadow: 0 10px 24px rgba(37,99,235,.35);
+  }
+  .primary:hover { background: linear-gradient(180deg, #4c92ff, #2f6ff0); }
+  .ghost {
+    flex: 0 0 auto; min-height: 62px; padding: 0 20px; font-size: 14px; color: #8ba3c7;
+    background: transparent; border-color: #23344f;
+  }
+  .ghost:hover { color: #cfe0f5; border-color: #33507c; }
+  button:focus-visible { outline: 2px solid #9fd0ff; outline-offset: 2px; }
+
+  .hint { margin: 24px 0 0; padding-top: 18px; border-top: 1px solid #1f2f4d;
+          font-size: 13px; color: #7d92b3; text-align: left; }
+  .hint code { background: #0b1220; padding: 2px 6px; border-radius: 5px; color: #9fd0ff; font-size: 12.5px; }
+  .warn { color: #f0c674; }
+  @media (prefers-reduced-motion: reduce) { .num { transition: none; } }
 </style>
 </head>
 <body>
 <main class="card">
-  <div class="ok"><span class="dot"></span><span id="mode">静态站已上线</span></div>
-  <h1>部署成功</h1>
-  <p class="sub">这个页面就是你的「永久域名」正在工作的证明。</p>
+  <div class="badge"><span class="dot"></span><span class="host" id="host">读取中…</span></div>
 
-  <dl>
-    <dt>当前域名</dt>
-    <dd id="host">读取中…</dd>
+  <h1>按钮计数器</h1>
+  <p class="sub">点一下按钮，数字加一。</p>
 
-    <dt>协议</dt>
-    <dd id="proto">—</dd>
+  <div class="num" id="count">0</div>
+  <div class="label">累计点击</div>
 
-    <dt>访问时间</dt>
-    <dd id="now">—</dd>
-  </dl>
+  <div class="actions">
+    <button class="primary" id="inc" type="button">＋1</button>
+    <button class="ghost" id="reset" type="button">重置</button>
+  </div>
 
   <p class="hint">
-    把 <code>public/index.html</code> 改成你自己的内容，<code>git push</code> 后 Render 会自动重新部署。<br>
-    要接自己的域名：Render 控制台 → 该服务 → Settings → Custom Domains。
+    计数保存在<b>本机浏览器</b>里（<code>localStorage</code>）：刷新、关掉再打开都还在；
+    换设备或换浏览器则是各自独立的一份；清除浏览器数据会归零。<br>
+    键盘按 <code>空格</code> 或 <code>回车</code> 也能加一 —— 前提是焦点不在「重置」上。
   </p>
 </main>
+
 <script>
-  document.getElementById('host').textContent = location.host;
-  document.getElementById('proto').textContent = location.protocol.replace(':', '') + '（HTTPS 证书由 Render 自动签发）';
-  document.getElementById('now').textContent = new Date().toLocaleString('zh-CN');
+(function () {
+  'use strict';
+
+  var KEY = 'cryv888moe.counter.v1';
+
+  // localStorage 不是处处可用：隐私模式、被策略禁用、或配额满时会抛异常。
+  // 这种情况下退化成「本次打开期间有效」的内存计数，而不是让页面直接崩掉。
+  var store = (function () {
+    try {
+      var t = '__probe__';
+      window.localStorage.setItem(t, '1');
+      window.localStorage.removeItem(t);
+      return { durable: true,
+               get: function (k) { return window.localStorage.getItem(k); },
+               set: function (k, v) { window.localStorage.setItem(k, v); },
+               del: function (k) { window.localStorage.removeItem(k); } };
+    } catch (e) {
+      var mem = {};
+      return { durable: false,
+               get: function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; },
+               set: function (k, v) { mem[k] = v; },
+               del: function (k) { delete mem[k]; } };
+    }
+  })();
+
+  var el = document.getElementById('count');
+  var inc = document.getElementById('inc');
+  var reset = document.getElementById('reset');
+  var host = document.getElementById('host');
+  var n = read();
+
+  host.textContent = location.host || location.protocol.replace(':', '');
+  host.title = location.href;
+  paint();
+  if (!store.durable) {
+    var hint = document.querySelector('.hint');
+    hint.insertAdjacentHTML('afterbegin',
+      '<span class="warn">⚠ 浏览器禁止了本地存储，这个计数关掉页面就没了。</span><br>');
+  }
+
+  function read() {
+    var raw = store.get(KEY);
+    var v = parseInt(raw, 10);          // 非数字、空串、被改坏的值一律按 0 处理
+    return Number.isFinite(v) && v >= 0 ? v : 0;
+  }
+  function write() { store.set(KEY, String(n)); }
+  function paint(flash) {
+    el.textContent = n.toLocaleString('en-US');   // 千分位，位数多了也读得清
+    if (!flash) return;
+    el.classList.remove('pop');
+    void el.offsetWidth;                          // 强制重排，让动画能连续触发
+    el.classList.add('pop');
+    setTimeout(function () { el.classList.remove('pop'); }, 130);
+  }
+  function bump() { n += 1; write(); paint(true); }
+
+  inc.addEventListener('click', bump);
+
+  reset.addEventListener('click', function () {
+    if (n === 0 || !window.confirm('把计数从 ' + n.toLocaleString('en-US') + ' 归零？')) return;
+    n = 0; write(); paint();
+    el.classList.add('reset');
+    setTimeout(function () { el.classList.remove('reset'); }, 400);
+  });
+
+  // 空格/回车加一；焦点在按钮上时交给按钮自己处理，避免一次按键加两下。
+  document.addEventListener('keydown', function (e) {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key !== ' ' && e.key !== 'Enter' && e.key !== 'Spacebar') return;
+    if (e.target && e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    bump();
+  });
+
+  // 多标签页共用同一个 localStorage：别一个标签加了另一个还显示旧值。
+  window.addEventListener('storage', function (e) {
+    if (e.key !== KEY) return;
+    n = read(); paint();
+  });
+})();
 </script>
 </body>
 </html>
