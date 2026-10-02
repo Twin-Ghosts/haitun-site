@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>倾斜立方 · 联机</title>
+<meta name="description" content="7×7×7 立方体上的重心博弈：移动改变重心，立方体朝重心方向倾倒，被压到正下方的人掉血。纯前端 + 公共中继，不需要任何自有服务器。">
+<style>
+  :root { color-scheme: dark; --bg:#0f1226; --card:#171b34; --line:#2a2f52; --fg:#e8ebff;
+          --muted:#9aa0c8; --accent:#7c8cff; --hot:#ff6b8a; --gold:#ffd27a; --ok:#35d07f; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:15px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { max-width:1180px; margin:0 auto; padding:22px 14px 60px; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:2px; }
+  h2 { font-size:19px; margin:0 0 10px; letter-spacing:1px; }
+  h3 { font-size:15px; margin:16px 0 8px; color:var(--muted); letter-spacing:1px; }
+  .sub { color:var(--muted); font-size:13px; }
+  .back { display:block; text-align:center; font-size:13px; margin-bottom:14px; text-decoration:none; }
+  .back:hover { text-decoration:underline; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:14px; }
+  .hidden { display:none !important; }
+  .row { display:flex; gap:8px; align-items:center; margin:8px 0; flex-wrap:wrap; }
+  input, button, select { font:inherit; }
+  input { background:#0e1130; border:1px solid var(--line); color:var(--fg); border-radius:8px;
+          padding:8px 11px; min-width:0; }
+  input[readonly] { color:var(--muted); }
+  button { background:var(--accent); color:#0d1030; border:0; border-radius:8px; padding:8px 15px;
+           font-weight:700; cursor:pointer; }
+  button.ghost { background:#22264a; color:var(--fg); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.sm { padding:4px 9px; font-size:13px; }
+  .ruls { font-size:13px; color:var(--muted); line-height:1.75; }
+  .ruls b { color:var(--fg); }
+  .list { display:flex; flex-direction:column; gap:6px; }
+  .list > div { display:flex; justify-content:space-between; gap:10px; align-items:center;
+                padding:6px 10px; background:#12152e; border:1px solid var(--line); border-radius:8px; }
+  .list .me { color:var(--gold); font-weight:700; }
+  .seat { font-size:12px; color:var(--muted); }
+  .log { height:150px; overflow-y:auto; background:#0e1130; border:1px solid var(--line);
+         border-radius:8px; padding:8px 10px; font-size:13px; }
+  .chatline { padding:2px 0; font-size:13px; }
+  .chatline .who { color:var(--accent); font-weight:700; }
+  .chatline.sys { color:var(--gold); }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; vertical-align:1px; }
+  .dot.ok { background:var(--ok); } .dot.bad { background:var(--hot); }
+  /* ---- 对局布局 ---- */
+  .netbar { display:flex; gap:16px; flex-wrap:wrap; align-items:center; background:var(--card);
+            border:1px solid var(--line); border-radius:12px; padding:9px 14px; margin-bottom:10px; font-size:13.5px; }
+  .netbar b { color:var(--gold); letter-spacing:1px; }
+  .main { display:grid; grid-template-columns:1fr 330px; gap:12px; align-items:start; }
+  @media (max-width:900px) { .main { grid-template-columns:1fr; } }
+  #cvBox { position:relative; background:#0b0e22; border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  canvas { display:block; width:100%; touch-action:none; cursor:grab; }
+  canvas:active { cursor:grabbing; }
+  .side > .card { margin-bottom:10px; padding:14px 16px; }
+  .prow { display:flex; align-items:center; gap:8px; padding:5px 0; font-size:13.5px; }
+  .prow .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .prow .chip { width:12px; height:12px; border-radius:3px; flex:0 0 auto; }
+  .prow.dead { opacity:.42; }
+  .hp { display:inline-flex; gap:2px; align-items:center; }
+  .hpbar { width:52px; height:7px; background:#2a2f52; border-radius:4px; overflow:hidden; }
+  .hpbar > i { display:block; height:100%; background:var(--ok); }
+  .tag { font-size:11px; padding:1px 7px; border-radius:20px; background:#22264a; color:var(--muted); }
+  .tag.done { background:#14301f; color:var(--ok); }
+  .tag.me { background:#301f14; color:var(--gold); }
+  #actionBar { display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap;
+               background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; }
+  #moveInfo { flex:1; min-width:180px; font-size:13.5px; color:var(--muted); }
+  .banner { position:fixed; left:50%; top:14px; transform:translateX(-50%); background:#2b1f4d;
+            border:1px solid var(--accent); color:var(--fg); padding:9px 18px; border-radius:10px;
+            font-size:14px; z-index:50; box-shadow:0 8px 26px #0008; }
+  #flash { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#2b1f4d;
+           border:1px solid var(--accent); padding:9px 18px; border-radius:10px; opacity:0;
+           transition:opacity .25s; pointer-events:none; z-index:60; }
+  #flash.show { opacity:1; }
+  .festival { text-align:center; color:var(--muted); font-size:12.5px; margin-top:26px; line-height:1.9; }
+  table.setup { width:100%; border-collapse:collapse; font-size:13.5px; }
+  table.setup th, table.setup td { padding:4px 6px; text-align:left; border-bottom:1px solid var(--line); }
+  table.setup th { color:var(--muted); font-weight:600; font-size:12.5px; }
+  table.setup input { width:64px; padding:4px 7px; }
+  .chipcolor { display:inline-block; width:11px; height:11px; border-radius:3px; vertical-align:-1px; margin-right:5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>倾斜立方 <span class="sub" style="letter-spacing:0">7×7×7 重心博弈</span></h1>
+  <div class="sub" style="margin-bottom:14px">纯前端小游戏 · 打开即玩；对局消息只经公共中继转发，不经过任何自有服务器</div>
+  <a class="back" href="../../index.html">← 返回游戏列表</a>
+
+  <!-- ================= 入口 / 大厅 ================= -->
+  <div id="setup">
+    <div class="card">
+      <h2>怎么玩</h2>
+      <div class="ruls">
+        <b>场地</b>：7×7×7 = 343 个小立方体，编号 1..343；编号 1–49 是「第 1 层」那一整面，自上而下逐层编号。
+        <b>正中心是 172 号</b>，所有人起手都站在这里。<br>
+        <b>每回合</b>：所有人同时移动一格，可以走到「距离 ≤ √3」的相邻格（3×3×3 去掉自身 = 26 个方向），也可以原地不动。<br>
+        <b>结算</b>：移动后算所有<b>存活玩家</b>的重心（按体重 A 加权）。重心若不在正中心，
+        立方体就朝重心方向<b>整体倾斜、让重心朝下</b> —— 此时处在<b>正下方</b>（沿重心方向最深）的那位被压：
+        第 <i>t</i> 回合扣 <b>⌈t/2⌉</b> 点血 → 1,1,2,2,3,3,4,4,…<br>
+        <b>每轮姿态</b>：每一轮开始时立方体都先回到正位 —— 也就是<b>编号 1–49 那一面朝上</b>，再按新的重心方向倾倒。<br>
+        <b>并列</b>：多人并列最下方时，<b>只有体重最小的</b>那个挨压。<br>
+        <b>重心恰在正中心</b>（例如所有人对称站位）→ 立方体不倾斜，本轮<b>无人受伤</b>。<br>
+        <b>获胜</b>：血量归零出局，最后活下来的人赢。<br>
+        <span class="sub"><b>参数</b>：第 i 位玩家体重 A=i、生命值 B=i（默认），房主开局前可逐位调整 ——
+        规则要求 <b>A1..AN 与 B1..BN 各自互不相同</b>（同一组里不能有两个人一样）。最少 2 人即可开局。</span>
+      </div>
+    </div>
+
+    <div class="card" id="entryCard">
+      <h2>进房间</h2>
+      <div class="row"><input id="netName" maxlength="12" placeholder="你的名字" style="flex:1;min-width:150px"></div>
+      <div class="row">
+        <button id="createRoomBtn">创建新房间</button>
+        <input id="netRoom" maxlength="4" placeholder="房号" style="width:96px;text-transform:uppercase">
+        <button id="joinRoomBtn" class="ghost">加入</button>
+      </div>
+    </div>
+
+    <div class="card hidden" id="netPanel">
+      <h2>房间 <b id="roomCodeShow" style="letter-spacing:2px"></b></h2>
+      <div class="row"><span id="netRole"></span><span id="netStatus"></span></div>
+      <div class="row">
+        <input id="roomLink" readonly style="flex:1;min-width:180px">
+        <button id="copyLinkBtn" class="ghost sm">复制邀请链接</button>
+        <button id="leaveBtn" class="ghost sm">离开房间</button>
+      </div>
+
+      <h3>成员 <span id="lobbyCount"></span></h3>
+      <div class="list" id="lobbyList"></div>
+
+      <div id="setupEditor"></div>
+
+      <div class="row" style="margin-top:14px">
+        <button id="startNetBtn" class="hidden">开始对局</button>
+        <span class="sub" id="startHint"></span>
+      </div>
+
+      <h3>房间聊天</h3>
+      <div class="log" id="chatList"></div>
+      <div class="row"><input id="chatInputLobby" maxlength="90" placeholder="说点什么…" style="flex:1">
+        <button id="chatSendLobby" class="ghost sm">发送</button></div>
+    </div>
+  </div>
+
+  <!-- ================= 对局 ================= -->
+  <div id="game" class="hidden">
+    <div class="netbar">
+      <span>房间 <b id="nbRoom"></b></span>
+      <span>第 <b id="nbRound">0</b> 回合</span>
+      <span id="nbSub"></span>
+      <span>⏱ <b id="nbClock">—</b></span>
+      <span id="nbConn"></span>
+    </div>
+
+    <div class="main">
+      <div id="cvBox">
+        <canvas id="cv"></canvas>
+        <div id="banner" class="banner hidden"></div>
+      </div>
+
+      <div class="side">
+        <div class="card">
+          <h3 style="margin-top:0">玩家</h3>
+          <div id="players"></div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">本回合</h3>
+          <div id="tiltInfo" class="ruls" style="font-size:13px"></div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">战报</h3>
+          <div class="log" id="logBox"></div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">房间聊天</h3>
+          <div class="log" id="chatListGame" style="height:110px"></div>
+          <div class="row"><input id="chatInput" maxlength="90" placeholder="说点什么…" style="flex:1">
+            <button id="chatSend" class="ghost sm">发送</button></div>
+          <div class="row"><button id="leaveBtn2" class="ghost sm">离开房间</button>
+            <button id="againBtn" class="ghost sm hidden">再来一局</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="actionBar">
+      <div id="moveInfo">拖动画面可旋转视角 · 点击高亮格选择落点</div>
+      <button id="stayBtn" class="ghost">原地不动</button>
+      <button id="submitBtn">确认移动</button>
+    </div>
+  </div>
+
+  <div class="festival">
+    本页是纯静态文件，运行在你的浏览器里；对局消息只经公共 MQTT 中继（broker.emqx.io）转发，不经过任何自有服务器。<br>
+    公共中继无鉴权 —— 房号就是全部凭据，别在公开场合贴房号，也别拿它做赌注。
+  </div>
+</div>
+
+<script src="engine.js"></script>
+<script src="net.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
