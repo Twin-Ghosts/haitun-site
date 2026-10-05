@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>矩阵对策求解器</title>
+<meta name="description" content="纯前端矩阵对策求解器：输入双人零和对策矩阵，求甲、乙双方的最优混合策略与对策值，结果用分数精确给出。">
+<style>
+  :root { color-scheme: dark;
+          --bg:#0b1220; --card:#111c30; --line:#1f2f4d; --line2:#23344f;
+          --fg:#e6edf7; --muted:#8ba3c7; --dim:#7d92b3;
+          --accent:#9fd0ff; --ok:#5ce1a0; --warn:#f0c674; --hot:#ff6b8a;
+          --mono: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; min-height: 100vh; padding: 26px 18px 60px;
+    font: 16px/1.65 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #16233d 0%, #0b1220 60%);
+    color: var(--fg);
+  }
+  .card { width: min(760px, 100%); margin: 0 auto; background: var(--card);
+          border: 1px solid var(--line); border-radius: 18px; padding: 26px 28px 22px;
+          box-shadow: 0 18px 50px rgba(0,0,0,.5); }
+  h1 { margin: 0 0 4px; font-size: 23px; letter-spacing: .01em; }
+  .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 20px; }
+  h3 { font-size: 13.5px; margin: 0 0 9px; color: var(--accent); font-weight: 650;
+       letter-spacing: .02em; }
+
+  /* ── 输入区 ─────────────────────────────────────── */
+  .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .fld { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  button { font: inherit; cursor: pointer; border-radius: 11px; border: 1px solid transparent;
+           transition: transform .07s, background .14s, border-color .14s, color .14s;
+           white-space: nowrap; }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .primary { background: linear-gradient(180deg, #3b82f6, #2563eb); color: #fff;
+             font-weight: 650; min-height: 46px; padding: 0 26px; font-size: 16px;
+             box-shadow: 0 10px 24px rgba(37,99,235,.32); }
+  .primary:hover { background: linear-gradient(180deg, #4c92ff, #2f6ff0); }
+  .ghost { background: transparent; border-color: var(--line2); color: var(--muted);
+           min-height: 36px; padding: 0 13px; font-size: 13px; }
+  .ghost:hover { color: #cfe0f5; border-color: #33507c; }
+  .ghost.on { color: var(--accent); border-color: #33507c; background: rgba(159,208,255,.07); }
+  .sm { min-height: 32px; font-size: 12.5px; padding: 0 11px; border-radius: 9px; }
+
+  input.dim { width: 58px; height: 34px; text-align: center; font: inherit; font-size: 14px;
+              background: #0b1220; border: 1px solid var(--line2); border-radius: 9px;
+              color: var(--fg); font-family: var(--mono); }
+  input.dim:focus { outline: none; border-color: var(--accent); }
+
+  .pastebox { background: #0b1220; border: 1px solid var(--line); border-radius: 12px;
+              padding: 12px 13px; margin-bottom: 12px; }
+  .pastebox textarea { width: 100%; min-height: 108px; resize: vertical; background: #080d18;
+                       border: 1px solid var(--line2); border-radius: 9px; color: var(--fg);
+                       font-family: var(--mono); font-size: 13px; padding: 9px 11px; line-height: 1.7; }
+  .pastebox textarea:focus { outline: none; border-color: var(--accent); }
+  .pastebox .bar { margin: 10px 0 0; }
+
+  .gridwrap { overflow-x: auto; padding: 2px 0 10px; }
+  table.grid { border-collapse: separate; border-spacing: 6px; margin: 0 auto; }
+  table.grid th { font-size: 11.5px; color: var(--dim); font-weight: 600; padding: 0;
+                  font-family: var(--mono); white-space: nowrap; }
+  table.grid th.corner { font-size: 11px; color: #5f7396; }
+  table.grid th.rowhead { text-align: right; padding-right: 2px; }
+  input.cell { width: 64px; height: 38px; text-align: center; font-family: var(--mono);
+               font-size: 14.5px; background: #0b1220; border: 1px solid var(--line2);
+               border-radius: 9px; color: var(--fg); }
+  input.cell:focus { outline: none; border-color: var(--accent);
+                     box-shadow: 0 0 0 3px rgba(159,208,255,.15); }
+  input.cell.bad { border-color: var(--hot); color: var(--hot); }
+
+  .lbl { font-size: 13px; color: var(--muted); }
+  .msg { font-size: 13px; color: var(--muted); }
+  .err { color: var(--hot); font-weight: 600; }
+
+  /* ── 结果区 ─────────────────────────────────────── */
+  .out { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 20px; }
+  .verdict { background: rgba(159,208,255,.07); border: 1px solid #24406b; color: #cfe0f5;
+             border-radius: 12px; padding: 11px 14px; font-size: 14px; margin-bottom: 14px; }
+  .verdict b { color: var(--accent); }
+  .verdict.pure { background: rgba(92,225,160,.07); border-color: #1f4b38; }
+  .verdict.pure b { color: var(--ok); }
+
+  .value { text-align: center; background: #0b1220; border: 1px solid var(--line);
+           border-radius: 14px; padding: 16px 16px 14px; margin-bottom: 18px; }
+  .vlabel { font-size: 11.5px; letter-spacing: .16em; color: var(--dim); text-transform: uppercase; }
+  .vnum { font-family: var(--mono); font-size: clamp(26px, 7vw, 34px); font-weight: 700;
+          color: var(--ok); line-height: 1.3; margin: 4px 0 2px; word-break: break-all; }
+  .vdec { font-size: 15px; color: var(--muted); font-weight: 400; }
+  .vnote { font-size: 12.5px; color: var(--muted); }
+
+  .side { margin-bottom: 18px; }
+  .picks { display: flex; flex-direction: column; gap: 7px; }
+  .pick { display: grid; grid-template-columns: 52px 1fr 132px; align-items: center; gap: 10px;
+          font-size: 13.5px; }
+  .pick .pn { color: var(--muted); font-family: var(--mono); }
+  .pick .pv { text-align: right; font-family: var(--mono); color: var(--fg); font-size: 13px; }
+  .pick .pv em { color: var(--dim); font-style: normal; font-size: 12px; }
+  .pick .pb { height: 9px; background: #0b1220; border: 1px solid #1a2942; border-radius: 99px;
+              overflow: hidden; }
+  .pick .pb i { display: block; height: 100%; border-radius: 99px;
+                background: linear-gradient(90deg, #3b82f6, #5ce1a0); }
+  .pick.zero { opacity: .4; }
+  .pick.zero .pb i { background: #33456b; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-family: var(--mono); font-size: 12.5px; background: #0b1220;
+          border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; color: var(--muted); }
+  .chip.hit { color: var(--ok); border-color: #1f4b38; background: rgba(92,225,160,.07); }
+  .chip.low { color: #6f83a6; }
+
+  .notes { font-size: 13px; color: var(--muted); line-height: 1.9; }
+  .notes b { color: var(--fg); font-weight: 600; }
+  .notes code { font-family: var(--mono); background: #0b1220; border: 1px solid var(--line);
+                border-radius: 5px; padding: 1px 6px; font-size: 12.5px; color: var(--accent); }
+  .warnbox { background: rgba(240,198,116,.08); border: 1px solid #4a3f22; color: var(--warn);
+             border-radius: 10px; padding: 9px 12px; font-size: 13px; margin: 0 0 12px; }
+  .sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+  .foot { margin: 22px 0 0; padding-top: 16px; border-top: 1px solid var(--line);
+          font-size: 12.5px; color: var(--dim); line-height: 1.95; text-align: left; }
+  .foot b { color: var(--muted); }
+  @media (max-width: 560px) {
+    .card { padding: 20px 16px 16px; border-radius: 14px; }
+    .pick { grid-template-columns: 44px 1fr 116px; }
+  }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>矩阵对策求解器</h1>
+  <p class="sub">输入一个双人零和对策矩阵，求甲、乙双方的最优混合策略与对策值。结果用分数精确给出。</p>
+
+  <div class="bar">
+    <label class="fld">行 <input class="dim" id="rows" type="number" min="1" max="12" step="1" value="2"></label>
+    <label class="fld">列 <input class="dim" id="cols" type="number" min="1" max="12" step="1" value="2"></label>
+    <button class="ghost" id="btn-paste" type="button">批量粘贴</button>
+    <button class="ghost" id="btn-clear" type="button">清空</button>
+  </div>
+
+  <div class="pastebox" id="pastebox" hidden>
+    <textarea id="paste" spellcheck="false"
+      placeholder="每行写一行，用空格 / 逗号 / 制表符分隔。例：&#10;2 -1&#10;-1 1&#10;也可粘成一整行（自动按方阵拆开）。单元格支持 3、-2、1/3、-0.25 这些写法。"></textarea>
+    <div class="bar">
+      <button class="primary" id="btn-apply" type="button" style="min-height:38px;font-size:14px;padding:0 18px">填入矩阵</button>
+      <span class="msg" id="paste-msg"></span>
+    </div>
+  </div>
+
+  <div class="gridwrap"><table class="grid" id="grid"></table></div>
+
+  <div class="bar">
+    <span class="lbl">试试：</span>
+    <button class="ghost sm" data-preset="rps" type="button">石头剪刀布</button>
+    <button class="ghost sm" data-preset="coin" type="button">猜硬币</button>
+    <button class="ghost sm" data-preset="n2x2" type="button">2×2 无鞍点</button>
+    <button class="ghost sm" data-preset="s2x2" type="button">2×2 有鞍点</button>
+    <button class="ghost sm" data-preset="m2x3" type="button">2×3 有一列不用</button>
+  </div>
+
+  <div class="bar" style="margin-bottom:0">
+    <button class="primary" id="btn-solve" type="button">求解</button>
+    <span class="err" id="err"></span>
+  </div>
+
+  <section class="out" id="out" hidden></section>
+
+  <p class="foot">
+    <b>矩阵里的数是什么：</b>第 <code>i</code> 行第 <code>j</code> 列的数字 = 甲选第 <code>i</code> 条策略、乙选第 <code>j</code> 条策略时<b>甲</b>的收益；
+    零和意味着乙的收益恒为它的相反数。甲要把它做大，乙要把它做小。<br>
+    <b>算在哪：</b>全部在你的浏览器里完成，不联网、不上传、不保存。<br>
+    <b>精度：</b>用整数与分数运算，<code>1/3</code> 就是 <code>1/3</code>，不是 0.3333 的近似。
+  </p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ===== 求解核心（下面这一整段是构建时原样注入的，与测试用的代码逐字节相同） ===== */
+/* ============================================================
+ * 零和矩阵对策求解核心 —— 精确有理数 + 单纯形法
+ *
+ * 数学设定：矩阵 A（m×n）的 a[i][j] 是「甲（行玩家）」在甲选 i、乙选 j 时
+ * 的收益；零和意味着乙的收益恒为 -a[i][j]。甲求 max，乙求 min。
+ * 由冯·诺依曼极小极大定理，混合策略下 max_x min_y = min_y max_x = v（对策值）。
+ *
+ * 求解思路（经典 1/v 变换，避免处理自由变量）：
+ *   1) 把 A 整体平移 c = 1 - min(A)，得 A' = A + c，所有元素 ≥ 1。
+ *      平移不改变双方的最优策略（只让期望收益整体加 c），且必有 v' = v + c ≥ 1 > 0。
+ *   2) 令 u = x/v'、w = y/v'，则原问题等价于一对互为对偶的线性规划：
+ *        甲： min  1ᵀu   s.t.  A'ᵀu ≥ 1, u ≥ 0     （最优值 = 1/v'）
+ *        乙： max  1ᵀw   s.t.  A'w ≤ 1, w ≥ 0      （最优值 = 1/v'）
+ *   3) 解右边那个 LP（加松弛变量后有现成的初始基，单相单纯形即可），
+ *      目标值 z = 1/v'，再由 w 得乙的策略、由松弛变量的影子价格得甲的策略。
+ *   4) v = v' - c，策略本身无需再平移回去。
+ *
+ * 全程用 BigInt 分数（不出现浮点误差），所以 1/3、5/3 这类结果都是精确的。
+ * ============================================================ */
+
+/* ---------- 精确有理数：用 [分子, 分母] 表示，分母恒 > 0 且已约分 ---------- */
+
+function bgcd(a, b) {
+  a = a < 0n ? -a : a; b = b < 0n ? -b : b;
+  while (b) { const t = a % b; a = b; b = t; }
+  return a;
+}
+function fr(n, d) {
+  n = BigInt(n);
+  d = (d === undefined || d === null) ? 1n : BigInt(d);
+  if (d === 0n) throw new Error('分母为零');
+  if (d < 0n) { n = -n; d = -d; }
+  const g = bgcd(n, d) || 1n;
+  return [n / g, d / g];
+}
+function f0() { return [0n, 1n]; }
+function f1() { return [1n, 1n]; }
+function fi(k) { return [BigInt(k), 1n]; }
+function fadd(a, b) { return fr(a[0] * b[1] + b[0] * a[1], a[1] * b[1]); }
+function fsub(a, b) { return fr(a[0] * b[1] - b[0] * a[1], a[1] * b[1]); }
+function fmul(a, b) { return fr(a[0] * b[0], a[1] * b[1]); }
+function fdiv(a, b) { if (b[0] === 0n) throw new Error('除以零'); return fr(a[0] * b[1], a[1] * b[0]); }
+function fneg(a) { return [-a[0], a[1]]; }
+function fcmp(a, b) { const l = a[0] * b[1], r = b[0] * a[1]; return l < r ? -1 : l > r ? 1 : 0; }
+function fisz(a) { return a[0] === 0n; }
+function fnum(a) { return Number(a[0]) / Number(a[1]); }
+function fstr(a) { return a[1] === 1n ? String(a[0]) : a[0] + '/' + a[1]; }
+
+/* 解析单元格文本：支持 3、-2、1/3、-0.25、.5、1. 这些写法；解析不了返回 null */
+function parseFrac(raw) {
+  let s = String(raw).trim();
+  if (!s) return null;
+  s = s.replace(/[\u2212\u2013\u2014\uFF0D]/g, '-').replace(/[\s\u00A0]/g, '');
+  let m = /^([+-]?\d+)\/(\d+)$/.exec(s);
+  if (m) return fr(m[1], m[2]);
+  m = /^([+-]?)(\d*)(?:\.(\d*))?$/.exec(s);
+  if (!m) return null;
+  const ip = m[2] || '', fp = m[3] || '';
+  if (!ip && !fp) return null;
+  const sign = m[1] === '-' ? -1n : 1n;
+  return fr(BigInt(ip + fp) * sign, 10n ** BigInt(fp.length));
+}
+
+/* ---------- 单纯形：一行主元消去 ---------- */
+
+function pivot(T, r, e, N) {
+  const p = T[r][e];
+  for (let k = 0; k <= N; k++) T[r][k] = fdiv(T[r][k], p);
+  for (let i = 0; i < T.length; i++) {
+    if (i === r) continue;
+    const f = T[i][e];
+    if (fisz(f)) continue;
+    for (let k = 0; k <= N; k++) T[i][k] = fsub(T[i][k], fmul(f, T[r][k]));
+  }
+}
+
+/* ---------- 主求解：返回甲的最优混合策略 x、乙的 y、对策值 v ---------- */
+
+function solveZeroSum(A) {
+  const m = A.length, n = A[0].length;
+  const MAXIT = 50000;
+
+  let mn = A[0][0];
+  for (let i = 0; i < m; i++) for (let j = 0; j < n; j++) if (fcmp(A[i][j], mn) < 0) mn = A[i][j];
+  const c = fsub(f1(), mn);                                 // 平移量，使 min(A') = 1
+  const Ap = A.map(function (row) { return row.map(function (t) { return fadd(t, c); }); });
+
+  // LP： max Σw    s.t.  Σ_j Ap[i][j]·w_j + s_i = 1  (i = 1..m),  w, s ≥ 0
+  // 变量编号：0..n-1 是 w_j，n..n+m-1 是松弛变量 s_i
+  const N = n + m;
+  const T = [new Array(N + 1)];
+  for (let j = 0; j < n; j++) T[0][j] = f1();               // 目标行 = c_j - z_j
+  for (let j = n; j < N; j++) T[0][j] = f0();
+  T[0][N] = f0();                                           // = -z
+  const basis = [];
+  for (let i = 0; i < m; i++) {
+    const row = new Array(N + 1);
+    for (let j = 0; j < n; j++) row[j] = Ap[i][j];
+    for (let j = n; j < N; j++) row[j] = f0();
+    row[n + i] = f1();                                      // 松弛变量：初始基
+    row[N] = f1();                                          // 右端项
+    T.push(row);
+    basis.push(n + i);
+  }
+
+  let iter = 0;
+  for (;;) {
+    if (++iter > MAXIT) throw new Error('单纯形迭代次数超限，请把矩阵改小一点');
+    let e = -1;
+    for (let j = 0; j < N; j++) if (fcmp(T[0][j], f0()) > 0) { e = j; break; }   // Bland 规则：选最小下标，保证不循环
+    if (e < 0) break;                                                            // 全部 ≤ 0 → 已最优
+    let r = -1, best = null;
+    for (let i = 1; i <= m; i++) {
+      if (fcmp(T[i][e], f0()) <= 0) continue;
+      const ratio = fdiv(T[i][N], T[i][e]);
+      if (best === null || fcmp(ratio, best) < 0 ||
+          (fcmp(ratio, best) === 0 && basis[i - 1] < basis[r - 1])) { best = ratio; r = i; }
+    }
+    if (r < 0) throw new Error('单纯形判定为无界（理论上不该发生）');
+    pivot(T, r, e, N);
+    basis[r - 1] = e;
+  }
+
+  const z = fneg(T[0][N]);                                   // 最优目标值 = 1/v'
+  if (fcmp(z, f0()) <= 0) throw new Error('目标值非正，求解异常');
+  const vp = fdiv(f1(), z);                                  // v'
+
+  const val = new Array(N);
+  for (let j = 0; j < N; j++) val[j] = f0();
+  for (let i = 0; i < m; i++) val[basis[i]] = T[i + 1][N];
+
+  const w = val.slice(0, n);                                 // 乙的缩放策略
+  const u = [];                                              // 甲的缩放策略 = 松弛列上的影子价格（取负）
+  for (let i = 0; i < m; i++) u.push(fneg(T[0][n + i]));
+
+  const y = w.map(function (t) { return fmul(t, vp); });
+  const x = u.map(function (t) { return fmul(t, vp); });
+  const v = fsub(vp, c);
+
+  // 非基变量中若还有「检验数为 0」的，说明最优解不唯一（只作提示用）
+  const inBasis = {};
+  for (let i = 0; i < m; i++) inBasis[basis[i]] = true;
+  let altHint = false;
+  for (let j = 0; j < n; j++) if (!inBasis[j] && fisz(T[0][j])) { altHint = true; break; }
+
+  return { x: x, y: y, v: v, m: m, n: n, altHint: altHint, shift: c };
+}
+
+/* ---------- 校验：最优性证书（严格证明，不是"看起来对"） ----------
+ * 若 x、y 是概率分布，且 xᵀA ≥ v（每列）与 Ay ≤ v（每行）同时成立，
+ * 则 v 就是对策值、两者都是最优策略 —— 这三条合起来就是极小极大定理的充分条件。 */
+
+function checkOptimal(A, x, y, v) {
+  const m = A.length, n = A[0].length;
+  let sx = f0(), sy = f0();
+  for (let i = 0; i < m; i++) { if (fcmp(x[i], f0()) < 0) return '甲的策略含负数'; sx = fadd(sx, x[i]); }
+  for (let j = 0; j < n; j++) { if (fcmp(y[j], f0()) < 0) return '乙的策略含负数'; sy = fadd(sy, y[j]); }
+  if (fcmp(sx, f1()) !== 0) return '甲的策略之和不是 1';
+  if (fcmp(sy, f1()) !== 0) return '乙的策略之和不是 1';
+  const colPay = [], rowPay = [];
+  for (let j = 0; j < n; j++) {
+    let s = f0();
+    for (let i = 0; i < m; i++) s = fadd(s, fmul(x[i], A[i][j]));
+    colPay.push(s);
+    if (fcmp(s, v) < 0) return '第 ' + (j + 1) + ' 列的期望收益小于对策值';
+  }
+  for (let i = 0; i < m; i++) {
+    let s = f0();
+    for (let j = 0; j < n; j++) s = fadd(s, fmul(y[j], A[i][j]));
+    rowPay.push(s);
+    if (fcmp(s, v) > 0) return '第 ' + (i + 1) + ' 行的期望收益大于对策值';
+  }
+  return { colPay: colPay, rowPay: rowPay };
+}
+
+/* ---------- 辅助分析：纯策略鞍点、严格劣策略 ---------- */
+
+function analyze(A) {
+  const m = A.length, n = A[0].length;
+
+  // 纯策略鞍点：max_i min_j a[i][j] 与 min_j max_i a[i][j] 相等时存在
+  let lo = null, hi = null;
+  const rowMin = [], colMax = [];
+  for (let i = 0; i < m; i++) {
+    let mn = A[i][0];
+    for (let j = 1; j < n; j++) if (fcmp(A[i][j], mn) < 0) mn = A[i][j];
+    rowMin.push(mn);
+    if (lo === null || fcmp(mn, lo) > 0) lo = mn;
+  }
+  for (let j = 0; j < n; j++) {
+    let mx = A[0][j];
+    for (let i = 1; i < m; i++) if (fcmp(A[i][j], mx) > 0) mx = A[i][j];
+    colMax.push(mx);
+    if (hi === null || fcmp(mx, hi) < 0) hi = mx;
+  }
+  // 鞍点 = 行最小值为 lo、同时列最大值为 lo 的那一格；这样的格子必然 a[i][j] = lo
+  const saddlePairs = [];
+  if (fcmp(lo, hi) === 0) {
+    for (let i = 0; i < m; i++) {
+      if (fcmp(rowMin[i], lo) !== 0) continue;
+      for (let j = 0; j < n; j++) if (fcmp(colMax[j], lo) === 0) saddlePairs.push([i, j]);
+    }
+  }
+
+  // 严格劣策略（可以被另一条策略在所有情形下严格压过）
+  const domRows = [];
+  for (let i = 0; i < m; i++) for (let k = 0; k < m; k++) {
+    if (i === k) continue;
+    let ok = true;
+    for (let j = 0; j < n; j++) if (fcmp(A[i][j], A[k][j]) <= 0) { ok = false; break; }
+    if (ok) { domRows.push({ bad: k, by: i }); break; }
+  }
+  const domCols = [];
+  for (let j = 0; j < n; j++) for (let k = 0; k < n; k++) {
+    if (j === k) continue;
+    let ok = true;
+    for (let i = 0; i < m; i++) if (fcmp(A[i][j], A[i][k]) >= 0) { ok = false; break; }
+    if (ok) { domCols.push({ bad: k, by: j }); break; }
+  }
+
+  return { saddle: fcmp(lo, hi) === 0, lo: lo, hi: hi,
+           saddlePairs: saddlePairs, domRows: domRows, domCols: domCols };
+}
+  /* ===== 求解核心结束 ===== */
+
+  var X = 12;                                   // 行列上限：超过这个规模手输也没意义了
+  var $ = function (id) { return document.getElementById(id); };
+  var gridEl = $('grid'), rowsEl = $('rows'), colsEl = $('cols');
+  var outEl = $('out'), errEl = $('err'), pastebox = $('pastebox'), pasteMsg = $('paste-msg');
+
+  var PRESETS = {
+    rps:  { m: 3, n: 3, v: [['0','-1','1'], ['1','0','-1'], ['-1','1','0']] },
+    coin: { m: 2, n: 2, v: [['1','-1'], ['-1','1']] },
+    n2x2: { m: 2, n: 2, v: [['2','-1'], ['-1','1']] },
+    s2x2: { m: 2, n: 2, v: [['3','1'], ['2','0']] },
+    m2x3: { m: 2, n: 3, v: [['2','1','3'], ['1','3','2']] }
+  };
+
+  /* ---------- 网格 ---------- */
+
+  function cells() { return gridEl.querySelectorAll('input.cell'); }
+  function readValues() {
+    var m = dim(rowsEl), n = dim(colsEl), vals = [], list = cells(), k = 0;
+    for (var i = 0; i < m; i++) { var row = []; for (var j = 0; j < n; j++) row.push(list[k++] ? list[k - 1].value : ''); vals.push(row); }
+    return vals;
+  }
+  function dim(el) { var v = parseInt(el.value, 10); return (isFinite(v) && v >= 1) ? Math.min(v, X) : 1; }
+
+  function buildGrid(m, n, values) {
+    var old = readValues();
+    gridEl.innerHTML = '';
+    var thead = document.createElement('thead'), tr = document.createElement('tr');
+    var corner = document.createElement('th');
+    corner.className = 'corner'; corner.textContent = '甲＼乙';
+    tr.appendChild(corner);
+    for (var j = 0; j < n; j++) { var th = document.createElement('th'); th.textContent = '乙' + (j + 1); tr.appendChild(th); }
+    thead.appendChild(tr); gridEl.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    for (var i = 0; i < m; i++) {
+      var row = document.createElement('tr'), rh = document.createElement('th');
+      rh.className = 'rowhead'; rh.textContent = '甲' + (i + 1); row.appendChild(rh);
+      for (var j2 = 0; j2 < n; j2++) {
+        var td = document.createElement('td'), inp = document.createElement('input');
+        inp.type = 'text'; inp.className = 'cell'; inp.spellcheck = false;
+        inp.setAttribute('autocomplete', 'off'); inp.setAttribute('inputmode', 'text');
+        var src = values || old;
+        inp.value = (src && src[i] && src[i][j2] !== undefined && src[i][j2] !== null) ? String(src[i][j2]) : '';
+        // 回车 = 求解，免得每次都要去点按钮
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); solve(); } });
+        inp.addEventListener('input', function () { this.classList.remove('bad'); errEl.textContent = ''; });
+        td.appendChild(inp); row.appendChild(td);
+      }
+      tbody.appendChild(row);
+    }
+    gridEl.appendChild(tbody);
+  }
+
+  function setSize() {
+    rowsEl.value = dim(rowsEl); colsEl.value = dim(colsEl);
+    buildGrid(dim(rowsEl), dim(colsEl), null);     // 保留已填内容；新格子留空
+    outEl.hidden = true; errEl.textContent = '';
+  }
+
+  /* ---------- 读矩阵 ---------- */
+
+  function readMatrix() {
+    var m = dim(rowsEl), n = dim(colsEl), list = cells(), A = [], k = 0;
+    for (var i = 0; i < m; i++) {
+      var row = [];
+      for (var j = 0; j < n; j++) {
+        var inp = list[k++];
+        var raw = inp ? inp.value : '';
+        var t = null, bad = false;
+        try { t = parseFrac(raw); } catch (e) { bad = true; }
+        if (t === null || bad) {
+          if (inp) inp.classList.add('bad');
+          throw new Error('第 ' + (i + 1) + ' 行第 ' + (j + 1) + ' 格' +
+            (String(raw).trim() ? '「' + String(raw).trim() + '」看不懂' : '还空着') +
+            ' —— 可以填 3、-2、1/3、-0.25 这样的数。');
+        }
+        row.push(t);
+      }
+      A.push(row);
+    }
+    return A;
+  }
+
+  /* ---------- 显示格式 ---------- */
+
+  function niceFrac(t) { return t[1] <= 100000n ? fstr(t) : null; }
+  function dec(x, sig) {
+    if (!isFinite(x)) return String(x);
+    if (x === 0) return '0';
+    var s = Number(x).toPrecision(sig || 6);
+    if (s.indexOf('e') < 0) { s = s.replace(/0+$/, '').replace(/\.$/, ''); }
+    return s;
+  }
+  function pct(t) {
+    var p = fnum(t) * 100;
+    if (Math.abs(p) < 1e-9) return '0%';
+    return (Math.abs(p - Math.round(p)) < 1e-9 ? String(Math.round(p)) : p.toFixed(1)) + '%';
+  }
+  function isPure(t) { return t.every(function (x) { return fisz(x) || fcmp(x, f1()) === 0; }); }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  function bars(getName, probs, extra) {
+    var h = '<div class="picks">';
+    for (var k = 0; k < probs.length; k++) {
+      var t = probs[k], z = fisz(t), w = Math.max(0, Math.min(100, fnum(t) * 100));
+      var nf = niceFrac(t);
+      h += '<div class="pick' + (z ? ' zero' : '') + '">' +
+             '<span class="pn">' + esc(getName(k)) + '</span>' +
+             '<span class="pb"><i style="width:' + w.toFixed(2) + '%"></i></span>' +
+             '<span class="pv">' + (z ? '0' : (nf !== null ? nf + ' <em>' + pct(t) + '</em>' : '<em>' + pct(t) + '</em>')) +
+             (extra && extra[k] ? ' ' + extra[k] : '') + '</span>' +
+           '</div>';
+    }
+    return h + '</div>';
+  }
+
+  function chip(label, t, v) {
+    var hit = fcmp(t, v) === 0;
+    return '<span class="chip' + (hit ? ' hit' : ' low') + '">' + esc(label) + ' ' + fstr(t) + '</span>';
+  }
+
+  /* ---------- 渲染结果 ---------- */
+
+  function render(A, r, info) {
+    var m = r.m, n = r.n, v = r.v, x = r.x, y = r.y;
+    var cert = checkOptimal(A, x, y, v);
+    if (!cert || typeof cert !== 'object') { throw new Error('内部校验未通过：' + cert); }
+
+    var pure = isPure(x) && isPure(y);
+    var vNum = fnum(v), vf = niceFrac(v);
+    // 整数就不必再重复写一遍小数（"1 ≈ 1" 读起来像出错）
+    var vDec = v[1] === 1n ? '' : '<span class="vdec">' + (vf !== null ? ' ≈ ' : '≈ ') + dec(vNum, 6) + '</span>';
+    var h = [];
+
+    // 结论
+    if (info.saddle) {
+      var sp = info.saddlePairs[0];
+      h.push('<div class="verdict pure">本局<b>有纯策略鞍点</b>：甲认准 <b>甲' + (sp[0] + 1) +
+             '</b>、乙认准 <b>乙' + (sp[1] + 1) + '</b>，谁先改谁吃亏，混合策略在这里反而多余。' +
+             (pure ? '' : '（不过最优策略不唯一，下面给的也是一组最优混合策略。）') + '</div>');
+    } else {
+      h.push('<div class="verdict">本局<b>没有鞍点</b> —— 任何固定的出法都会被对方抓住规律，' +
+             '所以双方都必须混合出手。下面就是各自的最优混合比例。</div>');
+    }
+
+    // 对策值
+    h.push('<div class="value">' +
+             '<div class="vlabel">对策值 v</div>' +
+             '<div class="vnum">' + (vf !== null ? vf : '') + vDec + '</div>' +
+             '<div class="vnote">双方都按最优策略打，甲每一局的平均收益 = ' + dec(vNum, 6) +
+               '（乙的 = ' + dec(-vNum, 6) + '）。</div>' +
+           '</div>');
+
+    // 双方策略
+    h.push('<div class="side"><h3>甲（行玩家）的最优混合策略</h3>' +
+           bars(function (k) { return '甲' + (k + 1); }, x) + '</div>');
+    h.push('<div class="side"><h3>乙（列玩家）的最优混合策略</h3>' +
+           bars(function (k) { return '乙' + (k + 1); }, y) + '</div>');
+
+    // 校验：为什么是这样
+    h.push('<div class="side"><h3>验算 · 为什么这就是最优的</h3>' +
+           '<div class="chips">' +
+             cert.rowPay.map(function (t, i) { return chip('甲' + (i + 1) + '单独打满全场', t, v); }).join('') +
+           '</div>' +
+           '<p class="notes" style="margin:8px 0 12px">乙用上面的最优混合时，甲无论单挑哪一条纯策略，拿到的都不超过 v' +
+             '（亮绿的正好等于 v）—— 所以乙已经把甲压到最低了。</p>' +
+           '<div class="chips">' +
+             cert.colPay.map(function (t, j) { return chip('乙' + (j + 1) + '单独打满全场', t, v); }).join('') +
+           '</div>' +
+           '<p class="notes" style="margin:8px 0 0">甲用最优混合时，乙无论单挑哪一条纯策略，甲都至少拿 v' +
+             '（亮绿的正好等于 v）—— 所以甲已经把自己的底线抬到最高了。两边同时成立，v 就被夹死了，这就是对策值。</p>' +
+           '</div>');
+
+    // 提示
+    var tips = [];
+    if (!info.saddle) {
+      tips.push('混合的要点是<b>让对手的每条可选策略收益持平</b>：对手算不出该偏哪一边，你怎么打都不亏。' +
+                '注意它只在<b>长期重复</b>下最优 —— 一局定输赢时，它不保证你这一局赢。');
+    }
+    var xZero = [], yZero = [];
+    for (var i = 0; i < m; i++) if (fisz(x[i])) xZero.push('甲' + (i + 1));
+    for (var j = 0; j < n; j++) if (fisz(y[j])) yZero.push('乙' + (j + 1));
+    if (xZero.length) tips.push('概率为 0 的策略：' + xZero.join('、') + '，甲用不上它们。');
+    if (yZero.length) tips.push('概率为 0 的策略：' + yZero.join('、') + '，乙用不上它们。');
+    var dr = info.domRows.map(function (d) { return '甲' + (d.bad + 1) + '被甲' + (d.by + 1) + '严格压过'; });
+    var dc = info.domCols.map(function (d) { return '乙' + (d.bad + 1) + '被乙' + (d.by + 1) + '严格压过'; });
+    if (dr.length || dc.length) {
+      tips.push('严格劣策略：' + dr.concat(dc).join('、') + ' —— 无论对手怎么打都不如另一条，' +
+                '有理性的人不会选它，所以它们的概率必然是 0。');
+    }
+    if (!pure && !info.saddle && r.altHint) {
+      tips.push('本局的最优策略<b>不唯一</b>：下面给出的是一组最优解，换一组同样最优的比例也不会更差。');
+    }
+    if (tips.length) {
+      h.push('<hr class="sep"><div class="notes"><b>怎么看这个结果</b><br>· ' + tips.join('<br>· ') + '</div>');
+    }
+
+    outEl.innerHTML = h.join('');
+    outEl.hidden = false;
+  }
+
+  /* ---------- 求解 ---------- */
+
+  function solve() {
+    errEl.textContent = '';
+    var A;
+    try { A = readMatrix(); } catch (e) { errEl.textContent = e.message; outEl.hidden = true; return; }
+    try {
+      var r = solveZeroSum(A);
+      render(A, r, analyze(A));
+    } catch (e) {
+      errEl.textContent = '算不出来：' + e.message;
+      outEl.hidden = true;
+    }
+  }
+
+  /* ---------- 粘贴解析 ---------- */
+
+  function parsePaste(text) {
+    var lines = String(text).replace(/\r/g, '').split('\n')
+                  .map(function (s) { return s.trim(); })
+                  .filter(function (s) { return s.length > 0; });
+    if (!lines.length) throw new Error('还没有粘内容。');
+    var rows = lines.map(function (s) { return s.split(/[\s,，、;；]+/).filter(function (t) { return t.length > 0; }); });
+    var m, n;
+    if (rows.length === 1) {                                  // 粘成一整行 → 若是完全平方数就按方阵拆
+      var c = rows[0].length, s = Math.round(Math.sqrt(c));
+      if (s * s !== c) {
+        for (var b1 = 0; b1 < c; b1++) {                      // 先挑出真正的"看不懂"，再抱怨形状
+          if (parseFrac(rows[0][b1]) === null) throw new Error('第 ' + (b1 + 1) + ' 个「' + rows[0][b1] + '」看不懂。');
+        }
+        throw new Error('只读到 1 行 ' + c + ' 个数，而 ' + c + ' 不是完全平方数，没法自动拆成方阵。' +
+                        '请每行写一行，先在「行/列」里定尺寸再逐格填，或者把个数补齐。');
+      }
+      m = n = s;
+      var flat = rows[0], sq = [];
+      for (var i = 0; i < s; i++) sq.push(flat.slice(i * s, i * s + s));
+      rows = sq;
+    } else {
+      m = rows.length; n = rows[0].length;
+      for (var i2 = 1; i2 < m; i2++) {
+        if (rows[i2].length !== n) throw new Error('第 ' + (i2 + 1) + ' 行有 ' + rows[i2].length + ' 个数，第 1 行有 ' + n + ' 个 —— 每行的个数要一样。');
+      }
+    }
+    if (m > X || n > X) throw new Error('读到 ' + m + '×' + n + '，超过上限 ' + X + '×' + X + '。');
+    for (var i3 = 0; i3 < m; i3++) for (var j3 = 0; j3 < n; j3++) {
+      var t = parseFrac(rows[i3][j3]);
+      if (t === null) throw new Error('第 ' + (i3 + 1) + ' 行第 ' + (j3 + 1) + ' 个「' + rows[i3][j3] + '」看不懂。');
+    }
+    return { m: m, n: n, rows: rows };
+  }
+
+  /* ---------- 事件绑定 ---------- */
+
+  rowsEl.addEventListener('change', setSize);
+  colsEl.addEventListener('change', setSize);
+  $('btn-solve').addEventListener('click', solve);
+
+  $('btn-clear').addEventListener('click', function () {
+    var list = cells();
+    for (var k = 0; k < list.length; k++) { list[k].value = ''; list[k].classList.remove('bad'); }
+    errEl.textContent = ''; outEl.hidden = true;
+  });
+
+  $('btn-paste').addEventListener('click', function () {
+    pastebox.hidden = !pastebox.hidden;
+    this.classList.toggle('on', !pastebox.hidden);
+    if (!pastebox.hidden) $('paste').focus();
+  });
+
+  $('btn-apply').addEventListener('click', function () {
+    pasteMsg.textContent = ''; pasteMsg.className = 'msg';
+    var p;
+    try { p = parsePaste($('paste').value); }
+    catch (e) { pasteMsg.textContent = e.message; pasteMsg.className = 'msg err'; return; }
+    rowsEl.value = p.m; colsEl.value = p.n;
+    buildGrid(p.m, p.n, p.rows);
+    pasteMsg.textContent = '已填入 ' + p.m + '×' + p.n + '，点「求解」。';
+    errEl.textContent = ''; outEl.hidden = true;
+  });
+
+  var presetBtns = document.querySelectorAll('[data-preset]');
+  for (var b = 0; b < presetBtns.length; b++) {
+    presetBtns[b].addEventListener('click', function () {
+      var p = PRESETS[this.getAttribute('data-preset')];
+      rowsEl.value = p.m; colsEl.value = p.n;
+      buildGrid(p.m, p.n, p.v);
+      errEl.textContent = ''; outEl.hidden = true;
+      solve();
+    });
+  }
+
+  buildGrid(2, 2, null);
+})();
+</script>
+</body>
+</html>
