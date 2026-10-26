@@ -473,7 +473,26 @@ const fmtN = g => g ? `${g.x.toFixed(2)}, ${g.y.toFixed(2)}, ${g.z.toFixed(2)}` 
 const myChoiceOut = me => (myChoice === null || myChoice === liveCellOf(me)) ? "原地不动" : myChoice + " 号格";
 
 /* ---------------- 总渲染 ---------------- */
+/* 本局结束时把对局记录落盘（详见 games/_record.js）。render() 每次都喊它，
+   模块内部保证同一局只记一次。 */
+function recTick() {
+  if (!window.GAME_RECORD) return;
+  const v = Net.NET.view;
+  GAME_RECORD.tick({
+    over: () => !!(v && v.finished),
+    game: 'cubetilt', name: '倾斜立方',
+    result: () => {
+      if (!v) return '';
+      const w = (v.seats || []).find(s => s.pid === v.winner);
+      return v.winner ? ('对局结束 —— ' + (w ? w.name : '未知玩家') + ' 获胜')
+                      : '对局结束 —— 全员出局，平局';
+    },
+    players: () => ((v && v.seats) || []).map(s => s.name)
+  });
+}
+
 function render() {
+  recTick();
   const v = Net.NET.view;
   if (!Net.NET.active) {
     $("setup").classList.remove("hidden"); $("game").classList.add("hidden");

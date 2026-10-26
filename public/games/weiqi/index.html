@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>围棋 · 对局与完整规则</title>
+<meta name="description" content="围棋：19路棋盘、双人同屏对弈，含提子、禁着点（自杀）、打劫规则与完整规则说明。">
+<style>
+  :root{--bg:#0f1226;--card:#171b34;--line:#2a2f52;--fg:#e8ebff;--muted:#9aa0c8;--accent:#7c8cff;--hot:#ff6b8a;--ok:#35d07f;--gold:#ffd27a;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:20px 14px 50px;}
+  a{color:var(--accent);}
+  h1{font-size:26px;text-align:center;margin:6px 0 2px;letter-spacing:2px;}
+  .sub{text-align:center;font-size:13px;color:var(--muted);margin-bottom:8px;}
+  .back{display:block;text-align:center;font-size:13px;margin-bottom:16px;text-decoration:none;}
+  .back:hover{text-decoration:underline;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+  .card h3{margin:0 0 10px;font-size:15px;color:var(--accent);}
+  button{font-family:inherit;font-size:14px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;font-weight:600;}
+  button:hover{background:#6a7aee;}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);}
+  button.ghost:hover{background:#20254a;}
+  button:disabled{background:#3a3f5e;color:#8a90b5;cursor:not-allowed;}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0;}
+  .grid{display:grid;grid-template-columns:minmax(320px,1fr) 1fr;gap:16px;align-items:start;}
+  @media(max-width:820px){.grid{grid-template-columns:1fr;}}
+  .boardwrap{background:#d9a441;border-radius:10px;padding:10px;display:inline-block;max-width:100%;}
+  canvas{display:block;width:100%;height:auto;touch-action:manipulation;cursor:pointer;border-radius:4px;}
+  .turn{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  .dot{width:16px;height:16px;border-radius:50%;display:inline-block;border:1px solid #0008;}
+  .dot.b{background:#111;}
+  .dot.w{background:#fff;}
+  .info{font-size:13px;color:var(--muted);}
+  .cap{font-size:13px;color:var(--muted);margin-top:6px;}
+  .msg{min-height:22px;font-size:13.5px;color:var(--gold);margin-top:8px;}
+  .rules{font-size:14px;line-height:1.85;}
+  .rules h4{margin:16px 0 6px;font-size:14.5px;color:var(--gold);}
+  .rules ol,.rules ul{margin:6px 0;padding-left:22px;}
+  .rules li{margin:4px 0;}
+  .rules code{background:#0c0f22;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:13px;}
+  .kbd{background:#0c0f22;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;font-size:12.5px;}
+  .note{background:#141833;border-left:3px solid var(--hot);padding:8px 12px;border-radius:6px;font-size:13px;color:#d7dbff;margin:8px 0;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0;}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;}
+  th{background:#141833;color:var(--gold);}
+</style>
+<link rel="stylesheet" href="../_net.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>围棋</h1>
+  <div class="sub">19 路棋盘 · 双人同屏 / 联机对弈 · 提子 / 禁着点 / 打劫 全部按规则判定</div>
+  <a class="back" href="../../index.html">← 返回游戏列表</a>
+
+  <div class="netpanel" id="netPanel">
+    <h3>联机房间</h3>
+    <div class="netrow">
+      <input id="netName" placeholder="你的昵称" maxlength="12">
+      <input id="netRoom" placeholder="房号" maxlength="4">
+      <button id="joinRoomBtn">加入房间</button>
+      <button class="ghost" id="createRoomBtn">创建房间</button>
+    </div>
+    <div class="netrow" id="netRoomInfo" style="display:none;">
+      <input id="roomLink" readonly>
+      <button class="ghost" id="copyLinkBtn">复制邀请链接</button>
+      <button class="ghost" id="leaveBtn">离开</button>
+    </div>
+    <div class="netmeta" id="netStatus"></div>
+    <div class="seats" id="lobbyList"></div>
+    <div class="netrow" id="netHostBar" style="display:none;">
+      <button id="startNetBtn">开始对局</button>
+    </div>
+    <div class="netrow" id="netGuestBar" style="display:none;">
+      <span class="netmeta">等待房主开始对局…</span>
+    </div>
+    <div id="chatCard" style="display:none;">
+      <div class="netrow"><input id="chatInput" placeholder="说点什么…" style="flex:1;"><button class="ghost" id="chatSend">发送</button></div>
+      <div class="chatlist" id="chatList"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <div class="turn"><span id="turnDot" class="dot b"></span><span id="turnTxt">黑棋行棋</span></div>
+        <div class="info">手数 <span id="moveNo">0</span></div>
+      </div>
+      <div class="boardwrap"><canvas id="cv" width="720" height="720"></canvas></div>
+      <div class="cap">
+        提子数 —— 黑提：<span id="capB">0</span> 子　白提：<span id="capW">0</span> 子
+      </div>
+      <div class="msg" id="msg"></div>
+      <div class="row">
+        <button id="btnPass">停一手（Pass）</button>
+        <button class="ghost" id="btnUndo">悔棋</button>
+        <button class="ghost" id="btnNew">重新开局</button>
+      </div>
+      <div class="info" style="margin-top:6px;">点棋盘交叉点落子。已提子/落子处不能重复落。</div>
+    </div>
+
+    <div class="card">
+      <h3>对局操作说明</h3>
+      <ul class="rules" style="padding-left:20px;">
+        <li><b>落子</b>：点击棋盘上的交叉点。</li>
+        <li><b>停一手</b>：轮到你时点「停一手（Pass）」。双方连续停一手，对局结束进入数子。</li>
+        <li><b>悔棋</b>：可逐步回退到自己满意的局面（不影响提子统计）。</li>
+        <li><b>重新开局</b>：清盘重来。</li>
+      </ul>
+      <div class="note">
+        <b>提示</b>：本页为本地同屏对弈，不联网、不上传数据。若要和远方的朋友下，把本页链接发过去即可各自摆棋。
+      </div>
+    </div>
+  </div>
+
+  <div class="card rules">
+    <h3>围棋完整规则</h3>
+
+    <h4>1. 棋盘与棋子</h4>
+    <p>围棋使用 <b>19×19 共 361 个交叉点</b>的棋盘（本页为 19 路）。对局双方各执<b>黑、白</b>两色棋子。棋子落在<b>交叉点上，不是格子里</b>。</p>
+    <p><b>反例／边界场景</b>：初学者常把棋子放在方格里，那是错的——围棋的"点"是横竖线的交点。棋盘边线附近的交点同样有效，边、角落子完全合法。</p>
+
+    <h4>2. 行棋顺序</h4>
+    <p>黑棋先走，双方轮流在空交叉点落子，每次一子，落子后不得移动。棋局开始前棋盘为空。</p>
+
+    <h4>3. 气（Liberties）</h4>
+    <p>一个棋子（或连成一片的同色棋子"棋串"）上下左右紧邻的空交叉点，称为它的<b>气</b>。</p>
+    <ul>
+      <li>中心一子有 <b>4 气</b>；边上一子有 <b>3 气</b>；角上一子有 <b>2 气</b>。</li>
+      <li>两子相连时，气是<b>并集</b>——相邻处互相占位，不再算作气。</li>
+    </ul>
+    <p><b>反例</b>：两个黑子横着相邻，很多人以为共 8 气，其实只有 <b>6 气</b>（2+4−2，相邻的两个点被彼此占据，不算空点）。</p>
+
+    <h4>4. 提子（Capture）</h4>
+    <p>当一方落子后，使对方某块棋串的<b>气变为 0</b>，该棋串被提掉，从棋盘上拿走，成为提子。被提掉的点重新变为空点。</p>
+    <p><b>顺序要点</b>：落子后<b>先</b>检查对方有没有被提，<b>再</b>检查自己是否无气——所以你可以在对方"虎口"（只剩一口气的位置）落子，只要你这一子同时吃掉了对方。</p>
+
+    <h4>5. 禁着点 / 禁止自杀</h4>
+    <p>不允许落子后<b>自己这一子（或己方棋串）没有气</b>，且<b>没有提到对方任何子</b>。这样的点叫"禁着点"（自杀手），不能下。</p>
+    <p><b>边界场景</b>：棋盘中间被白棋围出的一个单点，黑棋下进去立即无气又吃不到白子 → <b>禁着</b>。但如果下进去能先提掉旁边白棋的一块（白棋因此让出气），那就是合法的"打吃反杀"。</p>
+
+    <h4>6. 打劫（Ko）</h4>
+    <p>如果一方提子后，对方<b>立即回提</b>会还原到之前的棋形，形成无限循环。规则禁止这种立即回提：<b>被提的一方必须先在别处落一手（找劫材），才能回来提回这一子</b>。</p>
+    <p><b>反例／边界</b>：<u>打劫不是指所有提子</u>。只有当双方反复提同一个点、局面会简单复现时，才受打劫限制。如果是"打二还一"（提两子、还一子），棋形并不复现，就不构成劫，可以立即回应。</p>
+
+    <h4>7. 终局与数子（中国规则）</h4>
+    <p>双方<b>连续停一手</b>（Pass），对局结束。终局后开始计算胜负：</p>
+    <table>
+      <tr><th>项目</th><th>说明</th></tr>
+      <tr><td>盘上活子</td><td>己方所有被己方领地包围、且对方无法通过继续落子提掉的棋子</td></tr>
+      <tr><td>围住的空点</td><td>己方领地内、对方无法侵入的空交叉点</td></tr>
+      <tr><td>提子</td><td>对局中提掉的对方棋子（中国规则下也计入），本页计入统计</td></tr>
+    </table>
+    <p>两方各自"盘上活子 + 围住的空点"之和，多者胜。<b>黑棋先行须贴还 3¾ 子（即黑需多出 7 子以上才算胜）</b>，本页只给出盘面计数，胜负按规则自行判读。</p>
+    <p><b>边界场景</b>：双方各得盘面 180.5 子时为平——但因为有贴子，实际黑棋需要 185 子以上才判胜。</p>
+
+    <h4>8. 让子（Handicap，可选）</h4>
+    <p>水平差异较大时，可让弱者执黑先摆 2~9 子在固定星位，白棋再走。本页为公平对局，不设让子；若要让子，可在开局前自行摆好再开始。</p>
+
+    <h4>9. 胜负的特殊情形</h4>
+    <ul>
+      <li><b>认输</b>：一方主动认输，对方胜。</li>
+      <li><b>双方协议</b>：对局中双方可协商和棋或终局。</li>
+      <li><b>超时</b>：本页不计时；正式比赛超时按弃权负。</li>
+    </ul>
+  </div>
+</div>
+
+<script src="../_record.js"></script>
+<script src="../_net.js"></script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id && id[0]==='#' ? id.slice(1) : id);
+  const N = 19;
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const PAD = 30, CELL = (720 - PAD*2) / (N - 1);
+
+  let board, turn, koPoint, captures, moves, history, passes, moveNo;
+
+  function reset(){
+    board = new Array(N*N).fill(0); // 0 empty, 1 black, 2 white
+    turn = 1;
+    koPoint = -1;
+    captures = {1:0, 2:0};
+    moves = [];
+    history = [];
+    passes = 0;
+    moveNo = 0;
+    setMsg('');
+    render();
+  }
+
+  function idx(x,y){ return y*N + x; }
+  function inB(x,y){ return x>=0 && x<N && y>=0 && y<N; }
+
+  function neighbors(i){
+    const x = i % N, y = Math.floor(i / N);
+    const out = [];
+    if (x > 0) out.push(i-1);
+    if (x < N-1) out.push(i+1);
+    if (y > 0) out.push(i-N);
+    if (y < N-1) out.push(i+N);
+    return out;
+  }
+
+  // 找出 i 所在的同色棋串及其气；返回 {stones:[], libs:Set}
+  function group(i){
+    const color = board[i];
+    const seen = new Set([i]);
+    const stack = [i];
+    const libs = new Set();
+    while (stack.length){
+      const cur = stack.pop();
+      for (const nb of neighbors(cur)){
+        if (board[nb] === 0) libs.add(nb);
+        else if (board[nb] === color && !seen.has(nb)){ seen.add(nb); stack.push(nb); }
+      }
+    }
+    return { stones: Array.from(seen), libs };
+  }
+
+  // 在 pos 落子（color=1/2），返回 {ok, reason, captured:[]}
+  function play(pos, color, checkKo){
+    if (board[pos] !== 0) return { ok:false, reason:'该点已有棋子' };
+    if (checkKo && pos === koPoint) return { ok:false, reason:'打劫：此处暂时不能立即回提，请先在别处落子' };
+
+    board[pos] = color;
+    const opp = color === 1 ? 2 : 1;
+    let captured = [];
+
+    // 先提对方无气的棋串
+    for (const nb of neighbors(pos)){
+      if (board[nb] === opp){
+        const g = group(nb);
+        if (g.libs.size === 0){
+          for (const s of g.stones){ board[s] = 0; captured.push(s); }
+        }
+      }
+    }
+
+    // 再检查自己是否无气（且没提到子）→ 自杀
+    if (captured.length === 0){
+      const self = group(pos);
+      if (self.libs.size === 0){
+        board[pos] = 0;
+        return { ok:false, reason:'禁着点：落子后自己无气（禁止自杀）' };
+      }
+    }
+
+    // 判定打劫点：仅当正好提掉对方 1 子，且自己成串后只有 1 气时，禁止立即回提该点
+    let newKo = -1;
+    if (captured.length === 1){
+      const self = group(pos);
+      if (self.libs.size === 1) newKo = captured[0];
+    }
+
+    return { ok:true, captured, ko:newKo };
+  }
+
+  function place(x, y){
+    if (!inB(x,y)) return;
+    const pos = idx(x,y);
+    const snap = { board: board.slice(), turn, koPoint, capB: captures[1], capW: captures[2], moveNo, passes };
+    const r = play(pos, turn, true);
+    if (!r.ok){ setMsg(r.reason); return; }
+
+    history.push(snap);
+    captures[turn] += r.captured.length;
+    moves.push({ x, y, color: turn, captured: r.captured.length });
+    koPoint = r.ko;
+    moveNo++;
+    passes = 0;
+    turn = turn === 1 ? 2 : 1;
+
+    if (r.captured.length > 0) setMsg('提子 ' + r.captured.length + ' 子！');
+    else setMsg('');
+    render();
+  }
+
+  function doPass(){
+    const snap = { board: board.slice(), turn, koPoint, capB: captures[1], capW: captures[2], moveNo, passes };
+    history.push(snap);
+    passes++;
+    koPoint = -1;
+    moveNo++;
+    if (passes >= 2){
+      setMsg('双方连续停一手 —— 对局结束。请自行数子判胜负。');
+    } else {
+      setMsg((turn === 1 ? '黑棋' : '白棋') + '停一手。');
+    }
+    turn = turn === 1 ? 2 : 1;
+    render();
+  }
+
+  function undo(){
+    if (history.length === 0){ setMsg('没有可悔的棋了。'); return; }
+    const s = history.pop();
+    board = s.board; turn = s.turn; koPoint = s.koPoint;
+    captures[1] = s.capB; captures[2] = s.capW; moveNo = s.moveNo; passes = s.passes;
+    moves.pop();
+    setMsg('已悔一步。');
+    render();
+  }
+
+  function setMsg(t){ document.getElementById('msg').textContent = t || ''; }
+
+  /* 本局结束时把对局记录落盘（详见 games/_record.js）。render() 每帧都会喊它，
+     模块内部保证同一局只记一次。 */
+  function recTick(){
+    if (!window.GAME_RECORD) return;
+    GAME_RECORD.tick({
+      over: () => passes >= 2,
+      game: 'weiqi', name: '围棋',
+      result: () => { const m = document.getElementById('msg'); return m ? m.textContent : ''; },
+      players: () => {
+        const st = (BOARD_NET && BOARD_NET.net.seats) || [];
+        return ['黑方', '白方'].map((sd, i) =>
+          (st[i] && st[i].name) ? st[i].name : (NETMODE() ? '座位' + (i + 1) : sd));
+      }
+    });
+  }
+
+  function render(){
+    recTick();
+    // 棋盘底色
+    ctx.fillStyle = '#d9a441';
+    ctx.fillRect(0,0,720,720);
+
+    // 网格
+    ctx.strokeStyle = '#6b4a12';
+    ctx.lineWidth = 1.2;
+    for (let i=0;i<N;i++){
+      const p = PAD + i*CELL;
+      ctx.beginPath(); ctx.moveTo(PAD, p); ctx.lineTo(720-PAD, p); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p, PAD); ctx.lineTo(p, 720-PAD); ctx.stroke();
+    }
+
+    // 星位
+    const stars = [3,9,15];
+    ctx.fillStyle = '#6b4a12';
+    for (const sx of stars) for (const sy of stars){
+      ctx.beginPath();
+      ctx.arc(PAD + sx*CELL, PAD + sy*CELL, 3.2, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // 棋子
+    for (let y=0;y<N;y++) for (let x=0;x<N;x++){
+      const v = board[idx(x,y)];
+      if (!v) continue;
+      drawStone(x, y, v);
+    }
+
+    // 打劫点标记
+    if (koPoint >= 0 && board[koPoint] === 0){
+      const kx = koPoint % N, ky = Math.floor(koPoint / N);
+      ctx.strokeStyle = '#ff6b8a';
+      ctx.lineWidth = 2.4;
+      ctx.strokeRect(PAD + kx*CELL - 9, PAD + ky*CELL - 9, 18, 18);
+    }
+
+    // 状态栏
+    document.getElementById('turnDot').className = 'dot ' + (turn === 1 ? 'b' : 'w');
+    document.getElementById('turnTxt').textContent = turn === 1 ? '黑棋行棋' : '白棋行棋';
+    document.getElementById('capB').textContent = captures[1];
+    document.getElementById('capW').textContent = captures[2];
+    document.getElementById('moveNo').textContent = moveNo;
+  }
+
+  function drawStone(x, y, color){
+    const cx = PAD + x*CELL, cy = PAD + y*CELL;
+    const r = CELL*0.46;
+    const g = ctx.createRadialGradient(cx - r*0.35, cy - r*0.35, r*0.15, cx, cy, r);
+    if (color === 1){ g.addColorStop(0,'#5a5a5a'); g.addColorStop(1,'#000'); }
+    else { g.addColorStop(0,'#fff'); g.addColorStop(1,'#cfcfcf'); }
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = color === 1 ? '#000' : '#9a9a9a';
+    ctx.lineWidth = 1; ctx.stroke();
+  }
+
+  // 鼠标 / 触摸
+  function pos_from_event(e){
+    const rect = cv.getBoundingClientRect();
+    const scale = 720 / rect.width;
+    let px, py;
+    if (e.touches && e.touches[0]){ px = e.touches[0].clientX; py = e.touches[0].clientY; }
+    else { px = e.clientX; py = e.clientY; }
+    const x = (px - rect.left) * scale;
+    const y = (py - rect.top) * scale;
+    const gx = Math.round((x - PAD) / CELL);
+    const gy = Math.round((y - PAD) / CELL);
+    return { gx, gy };
+  }
+
+  cv.addEventListener('click', function(e){
+    const p = pos_from_event(e);
+    if (p.gx < 0 || p.gx >= N || p.gy < 0 || p.gy >= N){ return; }
+    // 距离交叉点太远则忽略
+    const rect = cv.getBoundingClientRect();
+    const scale = 720 / rect.width;
+    const cx = (e.clientX - rect.left) * scale;
+    const cy = (e.clientY - rect.top) * scale;
+    const dist = Math.hypot(cx - (PAD + p.gx*CELL), cy - (PAD + p.gy*CELL));
+    if (dist > CELL*0.55) return;
+    if (NETMODE() && mySide() !== turn) { setMsg('现在是对方回合，等对手落子。'); return; }
+    playOrRelay(p.gx, p.gy);
+  });
+
+  document.getElementById('btnPass').addEventListener('click', function(){
+    if (NETMODE()){ BOARD_NET.sendControl({ type:'pass' }); return; }
+    doPass();
+  });
+  document.getElementById('btnUndo').addEventListener('click', function(){
+    if (NETMODE()){ BOARD_NET.sendControl({ type:'undo' }); return; }
+    undo();
+  });
+  document.getElementById('btnNew').addEventListener('click', function(){
+    if (NETMODE()){ if (confirm('确认重新开局？当前棋局将清空。')) BOARD_NET.sendControl({ type:'new' }); return; }
+    if (confirm('确认重新开局？当前棋局将清空。')) reset();
+  });
+
+  /* ===================== 联机层挂接 ===================== */
+  let BOARD_NET = null;
+  const NETMODE = () => !!(BOARD_NET && BOARD_NET.isOnline());
+  const mySide = () => BOARD_NET ? (BOARD_NET.mySide()==null ? 0 : BOARD_NET.mySide()) : 0;
+
+  // 联机中：本机落子只是把请求发给房主，棋局由房主统一裁定
+  function playOrRelay(x, y){
+    if (NETMODE()){
+      if (mySide() !== turn) { setMsg('现在是对方回合。'); return; }
+      BOARD_NET.sendMove({ x, y });
+      return;
+    }
+    place(x, y);
+  }
+  // 房主权威落子：直接走完整的 place()（含历史栈、提子统计、劫争、轮转）
+  function hostPlace(x, y){
+    if (!inB(x,y)) return false;
+    const pos = idx(x,y);
+    if (board[pos] !== 0) return false;
+    place(x, y);
+    return board[pos] !== 0;
+  }
+  function hostPass(){
+    doPass();
+    return true;
+  }
+  function snapshotState(){
+    return {
+      board: board.slice(), turn, koPoint, moveNo, passes,
+      capB: captures[1], capW: captures[2],
+      moves: moves.slice(),
+      hist: history.map(h => ({ board: h.board.slice(), turn: h.turn, koPoint: h.koPoint, capB: h.capB, capW: h.capW, moveNo: h.moveNo, passes: h.passes })),
+      msg: document.getElementById('msg').textContent || ''
+    };
+  }
+  function loadState(s){
+    if (!s) return;
+    board = s.board.slice(); turn = s.turn; koPoint = s.koPoint;
+    moveNo = s.moveNo||0; passes = s.passes||0;
+    captures = {1: s.capB||0, 2: s.capW||0};
+    moves = (s.moves||[]).slice();
+    history = (s.hist||[]).map(h => ({ board: h.board.slice(), turn: h.turn, koPoint: h.koPoint, capB: h.capB, capW: h.capW, moveNo: h.moveNo, passes: h.passes }));
+    setMsg(s.msg||'');
+    render();
+  }
+
+  const adapter = {
+    seatCount: () => 2,
+    initGame: () => { reset(); return snapshotState(); },
+    state: () => snapshotState(),
+    loadState: s => loadState(s),
+    applyMove: mv => hostPlace(mv.x, mv.y),
+    turnSeat: () => (turn === 1 ? 0 : 1),
+    describeMove: (mv, side) => (side===0?'黑':'白') + ' ' + 'ABCDEFGHJKLMNOPQRST'[mv.x] + (19-mv.y),
+    onControl: (ctl) => {
+      if (!ctl) return false;
+      if (ctl.type === 'pass'){ doPass(); return true; }
+      if (ctl.type === 'undo'){ if (history.length===0) return false; undo(); return true; }
+      if (ctl.type === 'new'){ reset(); return true; }
+      return false;
+    },
+    describeControl: (ctl, side) => (ctl.type==='pass' ? ((side===0?'黑':'白')+' 停一手') : ctl.type==='undo' ? ((side===0?'黑':'白')+' 悔了一步') : (ctl.type==='new' ? '重新开局' : null)),
+    onLeave: () => { reset(); }
+  };
+
+  function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function renderNet(){
+    const online = NETMODE();
+    const seats = (BOARD_NET && BOARD_NET.net.seats) || [];
+    const myIdx = online ? BOARD_NET.mySide() : -1;
+    const hasGame = online && BOARD_NET.inGame();
+    $("#netPanel").classList.toggle("hidden", false);
+    $("#netRoomInfo").style.display = online ? "" : "none";
+    $("#chatCard").style.display = online ? "" : "none";
+    const slots = [];
+    for (let i=0;i<2;i++){
+      const s = seats[i];
+      slots.push('<div class="seatrow"><span class="'+(i===myIdx?'me':'')+'">'+(i===0?'黑方（先手）':'白方（后手）')+' · '+(s?esc(s.name):'<span class="side">空位（等对手）</span>')+(i===myIdx?' <span class="youbadge">你</span>':'')+'</span><span class="side">'+(s?(hasGame?'对局中':'已就座'):'—')+'</span></div>');
+    }
+    $("#lobbyList").innerHTML = slots.join("");
+    if (online){
+      const isHost = BOARD_NET.isHost();
+      $("#netHostBar").style.display = (isHost && !hasGame) ? "" : "none";
+      $("#netGuestBar").style.display = (!isHost && !hasGame) ? "" : "none";
+      $("#startNetBtn").disabled = seats.length < 2;
+      $("#startNetBtn").textContent = seats.length < 2 ? "开始对局（还缺对手）" : "开始对局";
+      $("#roomLink").value = location.origin + location.pathname + "#r=" + BOARD_NET.roomCode();
+      const roleTxt = isHost ? '本机结算' : (BOARD_NET.hostAlive() ? '房主在线' : '等待接管…');
+      const seatTxt = myIdx>=0 ? (myIdx===0?'（你执黑先行）':'（你执白后行）') : '';
+      $("#netStatus").innerHTML = (BOARD_NET.net.connected ? '<span class="dot ok"></span>中继已连接' : '<span class="dot bad"></span>连接中继…')
+        + ' · ' + roleTxt + seatTxt + (hasGame ? ' · 对局中' : '');
+      const chats = BOARD_NET.net.chat || [];
+      $("#chatList").innerHTML = chats.map(c => c.sys ? '<div class="chatline sys">'+esc(c.text)+'</div>' : '<div class="chatline"><span class="who">'+esc(c.name)+'</span>：'+esc(c.text)+'</div>').join("");
+      const cl = $("#chatList"); if (cl) cl.scrollTop = cl.scrollHeight;
+    }
+  }
+
+  $("#createRoomBtn").onclick = () => BOARD_NET.start("host", BOARD_NET.newRoom(), ($("#netName").value||"玩家").trim());
+  $("#joinRoomBtn").onclick = () => { const code=($("#netRoom").value||"").trim().toUpperCase(); if(code.length!==4){BOARD_NET.flash("房号是 4 位字母数字");return;} BOARD_NET.start("guest", code, ($("#netName").value||"玩家").trim()); };
+  $("#netRoom").addEventListener("keydown", e => { if (e.key==="Enter") $("#joinRoomBtn").click(); });
+  $("#copyLinkBtn").onclick = () => BOARD_NET.copyLink();
+  $("#leaveBtn").onclick = () => BOARD_NET.leave(false);
+  $("#chatSend").onclick = () => BOARD_NET.sendChat($("#chatInput").value);
+  $("#chatInput").addEventListener("keydown", e => { if (e.key==="Enter") BOARD_NET.sendChat($("#chatInput").value); });
+  $("#startNetBtn").onclick = () => BOARD_NET.startGame();
+
+  BOARD_NET = window.BoardNet.create({ namespace:"cryv/v1/weiqi/", clientPrefix:"cryv_wq", adapter });
+    BOARD_NET.setRender(renderNet);
+  window.__dbg = { adapter, net: () => BOARD_NET };
+
+  reset();
+
+  if (location.hash.indexOf("#r=") === 0) {
+    const code = location.hash.slice(3).trim().toUpperCase();
+    if (code.length===4){ $("#netRoom").value = code; BOARD_NET.start("guest", code, ($("#netName").value||"玩家").trim()); }
+  }
+})();
+</script>
+</body>
+</html>

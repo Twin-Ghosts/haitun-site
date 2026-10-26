@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新游戏骨架 · 开发测试区</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root { color-scheme: dark; --bg:#0f1226; --card:#171b34; --line:#2a2f52; --fg:#e8ebff;
+          --muted:#9aa0c8; --accent:#7c8cff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { max-width:760px; margin:0 auto; padding:34px 18px 60px; }
+  h1 { font-size:24px; margin:0 0 4px; letter-spacing:2px; }
+  .sub { color:var(--muted); font-size:13.5px; margin-bottom:22px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px;
+          padding:16px 18px; margin-bottom:14px; }
+  ol { margin:0; padding-left:22px; font-size:14px; line-height:2.1; }
+  code { background:#0b0e1e; border:1px solid var(--line); border-radius:6px;
+         padding:1px 6px; font-size:12.5px; color:#c3caf5; }
+  .stage { min-height:180px; display:flex; align-items:center; justify-content:center;
+           color:var(--muted); font-size:14px; border:1px dashed var(--line);
+           border-radius:14px; background:#0b0e1e; margin-bottom:14px; }
+  pre { background:#0b0e1e; border:1px solid var(--line); border-radius:12px;
+        padding:12px 14px; font-size:12.5px; color:#c3caf5; white-space:pre-wrap;
+        margin:0; min-height:70px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>新游戏骨架</h1>
+  <div class="sub">这是空壳，不是游戏。复制整个 starter 目录，改名，再开始写。</div>
+
+  <div class="card">
+    <ol>
+      <li>把 <code>public/dev/starter/</code> 整个复制成 <code>public/dev/你的游戏名/</code>，只在这个目录里加文件。</li>
+      <li>联机主题前缀用 <code>dev/你的游戏名/v1/</code>。主站是 <code>cubetilt/v1/</code> 与 <code>ghcq/v1/</code>，两边主题不交叉，测试房间不会串进主站。</li>
+      <li>保留顶部的 <code>&lt;meta name="robots" content="noindex, nofollow"&gt;</code>，别让搜索引擎收录半成品。</li>
+      <li>测试通了，再决定要不要「毕业」到 <code>public/games/你的游戏名/</code> 并加进主站列表。毕业之前，主站文件一个字都不用改。</li>
+    </ol>
+  </div>
+
+  <div class="stage" id="stage">（这里放你的画布 / 棋盘 / 列表）</div>
+  <pre id="out">就绪。</pre>
+</div>
+
+<script>
+  // 骨架的最小运行示例：只写本地 DOM，不联网。
+  // 要联机时，把主站游戏的 net.js 复制进本目录，只改一处：主题前缀常量。
+  //   const NS = "dev/你的游戏名/v1/";   // ← 必须带 dev/ 前缀
+  const out = document.getElementById("out");
+  const log = m => { out.textContent += "\n" + m; };
+  log("骨架已加载 —— 把它复制成 dev/你的游戏名/ 再开始写。");
+  log("本页面没有发起任何网络请求。");
+</script>
+</body>
+</html>

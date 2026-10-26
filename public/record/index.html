@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>对局记录 · cryv.pages.dev</title>
+<meta name="description" content="本机浏览器的游戏对局记录：每局结束自动记下参加者人数、用户名、参加时间与结果；总量超过 1 MB 时自动清空。">
+<link rel="canonical" href="https://cryv.pages.dev/record/">
+<style>
+  :root { color-scheme: dark; --bg:#0f1226; --card:#171b34; --line:#2a2f52; --fg:#e8ebff;
+          --muted:#9aa0c8; --accent:#7c8cff; --hot:#ff6b8a; --gold:#ffd27a; --ok:#35d07f; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { max-width:860px; margin:0 auto; padding:34px 18px 70px; }
+  a { color:var(--accent); }
+  header { margin-bottom:22px; }
+  h1 { font-size:25px; margin:0 0 6px; letter-spacing:2px; }
+  .sub { color:var(--muted); font-size:13.5px; }
+  .back { font-size:13px; text-decoration:none; }
+
+  /* ---- 顶部：record 内容文件大小总计 ---- */
+  .meter { background:var(--card); border:1px solid var(--line); border-radius:14px;
+           padding:16px 18px; margin:20px 0 8px; }
+  .meter .row { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .meter .big { font-size:27px; font-weight:800; letter-spacing:1px; }
+  .meter .big .cap { font-size:14px; color:var(--muted); font-weight:600; }
+  .meter .meta { color:var(--muted); font-size:12.5px; text-align:right; }
+  .bar { height:9px; border-radius:9px; background:#0b0e1e; border:1px solid var(--line);
+         overflow:hidden; margin:12px 0 6px; }
+  .bar > i { display:block; height:100%; width:0; background:linear-gradient(90deg,#7c8cff,#35d07f);
+             transition:width .25s; }
+  .bar.warn > i { background:linear-gradient(90deg,#ffd27a,#ff6b8a); }
+  .note { color:var(--muted); font-size:12.5px; }
+  .cleared { background:#2a1c2e; border:1px solid #4a2c46; color:#ffc7dc;
+             border-radius:10px; padding:9px 12px; font-size:13px; margin-top:10px; display:none; }
+
+  .sec { font-size:13px; color:var(--muted); letter-spacing:1px; margin:26px 0 12px; }
+
+  /* ---- 统计表 ---- */
+  table.sum { width:100%; border-collapse:collapse; background:var(--card);
+              border:1px solid var(--line); border-radius:12px; overflow:hidden; font-size:14px; }
+  table.sum th, table.sum td { padding:9px 13px; text-align:left; border-bottom:1px solid var(--line); }
+  table.sum th { color:var(--muted); font-weight:600; font-size:12.5px; letter-spacing:.5px; }
+  table.sum tr:last-child td { border-bottom:0; }
+  table.sum td.num { text-align:right; font-variant-numeric:tabular-nums; }
+
+  /* ---- 记录卡片 ---- */
+  .list { display:flex; flex-direction:column; gap:10px; }
+  .item { background:var(--card); border:1px solid var(--line); border-radius:13px; padding:13px 16px; }
+  .item .top { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .item .gname { font-weight:700; }
+  .item .when { color:var(--muted); font-size:12.5px; margin-left:auto; font-variant-numeric:tabular-nums; }
+  .row2 { margin-top:6px; font-size:14px; }
+  .row2 .k { color:var(--muted); margin-right:6px; }
+  .pl { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .chip { background:#101329; border:1px solid var(--line); border-radius:20px;
+          padding:2px 11px; font-size:12.5px; }
+  .item .res { margin-top:8px; font-size:14.5px; }
+  .empty { background:var(--card); border:1px dashed var(--line); border-radius:13px;
+           padding:26px 20px; text-align:center; color:var(--muted); font-size:14px; }
+  .danger { margin-top:30px; padding-top:18px; border-top:1px solid var(--line);
+            display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  button { font:inherit; cursor:pointer; border-radius:10px; padding:8px 16px;
+           border:1px solid #5a2a3a; background:#2a1420; color:#ff9db6; }
+  button:hover { border-color:var(--hot); }
+  button.ghost { border-color:var(--line); background:#141830; color:var(--fg); }
+  footer { margin-top:34px; text-align:center; font-size:12.5px; color:var(--muted); line-height:1.9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>对局记录</h1>
+    <div class="sub">每局结束时自动记下参加者人数、用户名、参加时间与结果 &nbsp;·&nbsp;
+      <a class="back" href="../index.html">← 返回游戏列表</a></div>
+  </header>
+
+  <!-- 顶部：record 内容文件大小总计 -->
+  <div class="meter">
+    <div class="row">
+      <div class="big"><span id="sizeNum">0 B</span> <span class="cap">/ 1.00 MB 上限</span></div>
+      <div class="meta" id="meta">—</div>
+    </div>
+    <div class="bar" id="bar"><i id="barFill"></i></div>
+    <div class="note">记录保存在<b>你自己这台浏览器</b>里（localStorage），不上传、不经过任何服务器；
+      换一台设备 / 换一个浏览器看到的是它自己的记录。</div>
+    <div class="cleared" id="clearedBox"></div>
+  </div>
+
+  <div class="sec">按游戏统计</div>
+  <div id="summaryHost"></div>
+
+  <div class="sec" id="listTitle">全部对局</div>
+  <div class="list" id="listHost"></div>
+
+  <div class="danger">
+    <button class="ghost" id="reloadBtn">刷新</button>
+    <button id="clearBtn">清空全部记录</button>
+    <span class="note">记录总量超过 1.00 MB 时，游戏会在落盘那一刻自动清空全部旧记录。</span>
+  </div>
+
+  <footer>
+    站点内容为纯静态文件，运行在你的浏览器里。<br>
+    对局记录只写在本机 localStorage，本页不发送任何数据出去。
+  </footer>
+</div>
+
+<script src="../games/_record.js"></script>
+<script>
+(function () {
+  "use strict";
+  var R = window.GAME_RECORD;
+
+  function esc(s) {
+    return String(s === undefined || s === null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function when(ms) {
+    if (!ms) return "—";
+    var d = new Date(ms);
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate())
+      + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  function render() {
+    var host = document.getElementById("listHost");
+    if (!R) {
+      host.innerHTML = '<div class="empty">记录模块没能加载（games/_record.js）。</div>';
+      return;
+    }
+    var st = R.read();
+    var recs = st.records.slice().reverse();     // 新的在上
+
+    /* ---- 顶部：文件大小总计 ---- */
+    var size = R.size(), max = R.MAX_BYTES;
+    document.getElementById("sizeNum").textContent = R.human(size);
+    var pct = Math.max(0, Math.min(100, size / max * 100));
+    document.getElementById("barFill").style.width = pct + "%";
+    document.getElementById("bar").className = "bar" + (pct >= 80 ? " warn" : "");
+    document.getElementById("meta").innerHTML =
+      "共 <b>" + st.records.length + "</b> 局 · 占上限 " + pct.toFixed(2) + "%"
+      + (st.clearedAt ? "<br>上次清空：" + when(st.clearedAt) : "");
+
+    var cb = document.getElementById("clearedBox");
+    if (st.clearedAt) {
+      cb.style.display = "block";
+      cb.innerHTML = st.clearedWhy === "manual"
+        ? "上次<b>手动清空</b>：" + when(st.clearedAt) + "（清掉 " + (st.clearedCount || 0) + " 条）"
+        : "⚠ 记录总量曾超过 1.00 MB，已按规则<b>强制清空</b>过 <b>"
+          + (st.clearedCount || 0) + "</b> 条旧记录（" + when(st.clearedAt)
+          + "）；当前这份列表是清空之后重新累积的。";
+    } else {
+      cb.style.display = "none";
+    }
+
+    /* ---- 按游戏统计 ---- */
+    var byGame = {}, order = [];
+    st.records.forEach(function (r) {
+      var k = r.game || "?";
+      if (!byGame[k]) { byGame[k] = { name: r.name || k, n: 0, heads: 0, last: 0, people: {} }; order.push(k); }
+      var g = byGame[k];
+      g.n++;
+      g.heads += (r.n || (r.players || []).length);
+      if (r.at > g.last) g.last = r.at;
+      (r.players || []).forEach(function (nm) { g.people[nm] = 1; });
+    });
+    order.sort(function (a, b) { return byGame[b].last - byGame[a].last; });
+
+    var sh = document.getElementById("summaryHost");
+    if (!order.length) {
+      sh.innerHTML = '<div class="empty">还没有任何记录 —— 去玩一局，对局结束时会自动记下来。</div>';
+    } else {
+      sh.innerHTML = '<table class="sum"><thead><tr><th>游戏</th>'
+        + '<th style="text-align:right">局数</th><th style="text-align:right">参与人次</th>'
+        + '<th style="text-align:right">不同用户名</th><th style="text-align:right">最近一局</th>'
+        + '</tr></thead><tbody>' + order.map(function (k) {
+          var g = byGame[k];
+          return "<tr><td>" + esc(g.name) + "</td>"
+            + '<td class="num">' + g.n + "</td>"
+            + '<td class="num">' + g.heads + "</td>"
+            + '<td class="num">' + Object.keys(g.people).length + "</td>"
+            + '<td class="num">' + when(g.last) + "</td></tr>";
+        }).join("") + "</tbody></table>";
+    }
+
+    /* ---- 逐局列表 ---- */
+    document.getElementById("listTitle").textContent = "全部对局（" + recs.length + "）";
+    if (!recs.length) { host.innerHTML = ""; return; }
+
+    host.innerHTML = recs.map(function (r) {
+      var names = r.players || [];
+      var count = r.n === undefined ? names.length : r.n;
+      return '<div class="item">'
+        + '<div class="top"><span class="gname">' + esc(r.name || r.game) + "</span>"
+        + '<span class="when">' + when(r.at) + "</span></div>"
+        + '<div class="row2"><span class="k">参加者人数</span>' + count + " 人</div>"
+        + '<div class="pl">' + names.map(function (nm) {
+            return '<span class="chip">' + esc(nm) + "</span>";
+          }).join("") + "</div>"
+        + '<div class="res"><span class="k" style="color:var(--muted)">结果</span> '
+        + esc(r.result || "—") + "</div>"
+        + "</div>";
+    }).join("");
+  }
+
+  document.getElementById("clearBtn").onclick = function () {
+    if (!R) return;
+    var n = R.count();
+    if (!n) { alert("现在没有记录可清。"); return; }
+    if (!confirm("确定清空全部 " + n + " 条对局记录？此操作不可撤销。")) return;
+    R.clear();
+    render();
+  };
+  document.getElementById("reloadBtn").onclick = render;
+  /* 另一个标签页写了新记录时，这里跟着更新 */
+  window.addEventListener("storage", render);
+  render();
+})();
+</script>
+</body>
+</html>

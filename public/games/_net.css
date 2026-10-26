@@ -1,0 +1,24 @@
+/* 棋盘类游戏共用：联机房间面板样式（围棋 / 中国象棋 / 国际象棋） */
+.netpanel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;}
+.netpanel.hidden{display:none;}
+.netpanel h3{margin:0 0 8px;font-size:15px;color:var(--accent);}
+.netrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0;}
+.netrow input{font-family:inherit;font-size:14px;background:#0f1226;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0;}
+.netrow input#roomLink{flex:1;min-width:180px;font-size:12px;color:var(--muted);}
+.netrow input#netRoom{width:110px;text-transform:uppercase;letter-spacing:3px;text-align:center;font-weight:700;}
+.netrow input#netName{width:130px;}
+.netmeta{font-size:12.5px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:4px;}
+.dot.ok{background:var(--ok);} .dot.bad{background:var(--hot);}
+.seats{margin:8px 0;font-size:13.5px;}
+.seats .seatrow{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--line);}
+.seats .me{color:var(--gold);font-weight:700;}
+.seats .side{font-size:12px;color:var(--muted);}
+#chatCard{margin-top:10px;}
+.chatlist{max-height:130px;overflow:auto;font-size:13px;line-height:1.6;padding:6px 0;}
+.chatline{margin:2px 0;}
+.chatline.sys{color:var(--muted);font-style:italic;}
+.chatline .who{color:var(--accent);font-weight:600;}
+.youbadge{display:inline-block;font-size:11px;background:var(--accent);color:#fff;border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:1px;}
+#flash{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(10px);background:#000c;border:1px solid var(--line);color:#fff;font-size:13.5px;padding:9px 16px;border-radius:9px;opacity:0;pointer-events:none;transition:.22s;z-index:60;max-width:88vw;text-align:center;}
+#flash.show{opacity:1;transform:translateX(-50%) translateY(0);}

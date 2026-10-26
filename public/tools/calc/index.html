@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>科学计算器</title>
+<meta name="description" content="纯前端科学计算器：三角函数、对数、幂、阶乘、括号与常量，支持键盘输入与历史记录。">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    font: 16px/1.65 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #16233d 0%, #0b1220 60%);
+    color: #e6edf7; padding: 24px;
+  }
+  .card {
+    width: min(600px, 100%); background: #111c30; border: 1px solid #1f2f4d;
+    border-radius: 18px; padding: 26px 28px 22px; box-shadow: 0 18px 50px rgba(0,0,0,.5);
+  }
+  h1 { margin: 0 0 2px; font-size: 22px; letter-spacing: .01em; }
+  .sub { color: #8ba3c7; font-size: 13.5px; margin: 0 0 18px; }
+
+  /* ── 显示区 ─────────────────────────────────────── */
+  .screen { background: #0b1220; border: 1px solid #1f2f4d; border-radius: 14px;
+            padding: 14px 16px 12px; margin-bottom: 14px; }
+  .flags { display: flex; gap: 8px; align-items: center; justify-content: space-between;
+           min-height: 22px; margin-bottom: 6px; }
+  .mode { font-size: 11px; letter-spacing: .12em; color: #7d92b3;
+          border: 1px solid #23344f; border-radius: 999px; padding: 2px 9px; cursor: pointer;
+          background: transparent; font-family: inherit; font-weight: 700; }
+  .mode.on { color: #ffd27a; border-color: #584a22; background: rgba(255,210,122,.08); }
+  .mem { font-size: 11px; color: #5ce1a0; letter-spacing: .1em; visibility: hidden; }
+  .mem.on { visibility: visible; }
+  .expr {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: clamp(20px, 5vw, 27px); min-height: 40px; color: #eaf2ff;
+    overflow-x: auto; white-space: nowrap; scrollbar-width: none;
+    direction: ltr; text-align: right; padding: 2px 0;
+  }
+  .expr::-webkit-scrollbar { display: none; }
+  .expr .caret { color: #5ce1a0; }
+  .out {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: clamp(16px, 4vw, 20px); text-align: right; color: #8ba3c7;
+    overflow-x: auto; white-space: nowrap; scrollbar-width: none; min-height: 26px;
+  }
+  .out::-webkit-scrollbar { display: none; }
+  .out.ok { color: #9fd0ff; font-weight: 650; }
+  .out.err { color: #ff6b8a; font-weight: 650; }
+
+  /* ── 键盘 ───────────────────────────────────────── */
+  .pad { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid transparent;
+    transition: transform .07s, background .14s, border-color .14s, color .14s;
+    min-height: 46px; padding: 0 2px; background: #16233d; color: #dbe6f7;
+    font-size: 15px; border-color: #1f2f4d; user-select: none;
+  }
+  button:hover { background: #1c2c4c; border-color: #2b3f66; }
+  button:active { transform: translateY(1px) scale(.98); }
+  button:focus-visible { outline: 2px solid #9fd0ff; outline-offset: 2px; }
+  .fn { font-size: 13.5px; color: #a9c0e2; background: #131e35; }
+  .op { background: #1b2a46; color: #cfe0f5; font-weight: 600; }
+  .del { background: #2a1730; color: #ff9db2; border-color: #3d1f3a; }
+  .del:hover { background: #371d3e; }
+  .eq { background: linear-gradient(180deg, #3b82f6, #2563eb); color: #fff; font-weight: 700;
+        box-shadow: 0 8px 20px rgba(37,99,235,.32); border-color: transparent; }
+  .eq:hover { background: linear-gradient(180deg, #4c92ff, #2f6ff0); }
+  .eq.wide { grid-column: span 2; }
+  .ac { background: #3a1c24; color: #ff8296; border-color: #4d2430; font-weight: 700; }
+  .ac:hover { background: #4a232e; }
+  .spacer { visibility: hidden; }
+
+  /* ── 历史 / 说明 ─────────────────────────────────── */
+  .hist { margin-top: 14px; border-top: 1px solid #1f2f4d; padding-top: 12px; }
+  .hist h2 { font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+             color: #7d92b3; margin: 0 0 8px; font-weight: 600; display: flex;
+             justify-content: space-between; align-items: center; }
+  .hist h2 button { min-height: 0; padding: 2px 10px; font-size: 11.5px; border-radius: 8px;
+                    background: transparent; border-color: #23344f; color: #8ba3c7; }
+  .hist ol { list-style: none; margin: 0; padding: 0; max-height: 150px; overflow-y: auto;
+             font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; }
+  .hist li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 6px;
+             border-radius: 7px; cursor: pointer; color: #9aa8c4; }
+  .hist li:hover { background: #16233d; color: #cfe0f5; }
+  .hist li b { color: #9fd0ff; font-weight: 650; }
+  .hist .empty { color: #5c6b88; font-size: 12.5px; padding: 4px 6px; }
+  .hint { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid #1f2f4d;
+          font-size: 12.5px; color: #7d92b3; line-height: 1.85; }
+  .hint code { background: #0b1220; padding: 2px 6px; border-radius: 5px; color: #9fd0ff;
+               font-size: 12px; }
+  @media (max-width: 420px) {
+    .card { padding: 20px 16px 18px; }
+    button { min-height: 42px; font-size: 14px; }
+    .fn { font-size: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>科学计算器</h1>
+  <p class="sub">表达式求值 · 三角函数 · 对数 · 幂与阶乘 · 括号与常量</p>
+
+  <div class="screen">
+    <div class="flags">
+      <button class="mode" id="ang" type="button" title="切换角度单位">DEG</button>
+      <span class="mem" id="mem">M</span>
+    </div>
+    <div class="expr" id="expr"></div>
+    <div class="out" id="out">0</div>
+  </div>
+
+  <div class="pad" id="pad">
+    <!-- 行 1：函数 + 清理 -->
+    <button class="fn" data-k="sin(">sin</button>
+    <button class="fn" data-k="cos(">cos</button>
+    <button class="fn" data-k="tan(">tan</button>
+    <button class="fn" data-k="ln(">ln</button>
+    <button class="fn" data-k="log(">log</button>
+    <button class="ac" data-a="ac">AC</button>
+
+    <!-- 行 2：反三角 + 幂/根 -->
+    <button class="fn" data-k="asin(">sin⁻¹</button>
+    <button class="fn" data-k="acos(">cos⁻¹</button>
+    <button class="fn" data-k="atan(">tan⁻¹</button>
+    <button class="fn" data-k="exp(">eˣ</button>
+    <button class="fn" data-k="sqrt(">√</button>
+    <button class="del" data-a="back">⌫</button>
+
+    <!-- 行 3：常量 + 幂 + 括号 -->
+    <button class="fn" data-k="pi">π</button>
+    <button class="fn" data-k="e">e</button>
+    <button class="fn" data-k="^">xʸ</button>
+    <button class="fn" data-k="(">(</button>
+    <button class="fn" data-k=")">)</button>
+    <button class="fn" data-a="inv" data-k="1/(">1/x</button>
+
+    <!-- 行 4：数字与四则 -->
+    <button data-k="7">7</button>
+    <button data-k="8">8</button>
+    <button data-k="9">9</button>
+    <button class="op" data-k="÷">÷</button>
+    <button class="op" data-k="%">%</button>
+    <button class="fn" data-k="!">n!</button>
+
+    <button data-k="4">4</button>
+    <button data-k="5">5</button>
+    <button data-k="6">6</button>
+    <button class="op" data-k="×">×</button>
+    <button class="fn" data-a="sqr">x²</button>
+    <button class="fn" data-k="cbrt(">∛</button>
+
+    <button data-k="1">1</button>
+    <button data-k="2">2</button>
+    <button data-k="3">3</button>
+    <button class="op" data-k="−">−</button>
+    <button class="fn" data-a="mem-add">M+</button>
+    <button class="fn" data-a="mem-recall">MR</button>
+
+    <button data-k="0">0</button>
+    <button data-k=".">.</button>
+    <button class="fn" data-a="neg">±</button>
+    <button class="op" data-k="+">+</button>
+    <button class="fn" data-a="ans">Ans</button>
+    <button class="eq" data-a="eq">=</button>
+  </div>
+
+  <div class="hist">
+    <h2>历史记录 <button type="button" id="clr-hist">清空</button></h2>
+    <ol id="hist"><li class="empty">还没有计算记录 — 算一次就会出现在这里（点一条可复用）。</li></ol>
+  </div>
+
+  <p class="hint">
+    键盘：数字与 <code>+ - * / ^ ( )</code> 直接输入，<code>Enter</code> 求值，<code>Backspace</code> 删除，
+    <code>Esc</code> 清空。<code>DEG/RAD</code> 决定三角函数的输入单位；<code>%</code> 按百分数计算
+    （如 <code>200×5%</code> = 10）；<code>Ans</code> 是上一次的结果。历史存在本机浏览器里。
+  </p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ══════════════════════════════════════════════════════════════
+     1. 求值器：词法分析 → 调度场算法 → 逆波兰求值
+        不用 eval()：既不安全（可执行任意代码），也无法表达
+        「2^3^2 右结合」这类需要自己定义优先级的规则。
+     ══════════════════════════════════════════════════════════════ */
+
+  var FN1 = {                      // 单参函数：名 → 实现
+    sin:   function (x) { return Math.sin(toRad(x)); },
+    cos:   function (x) { return Math.cos(toRad(x)); },
+    tan:   function (x) { return Math.tan(toRad(x)); },
+    asin:  function (x) { return fromRad(Math.asin(x)); },
+    acos:  function (x) { return fromRad(Math.acos(x)); },
+    atan:  function (x) { return fromRad(Math.atan(x)); },
+    ln:    Math.log,
+    log:   Math.log10,
+    exp:   Math.exp,
+    sqrt:  Math.sqrt,
+    cbrt:  Math.cbrt,
+    abs:   Math.abs
+  };
+  var CONST = { pi: Math.PI, e: Math.E, tau: 2 * Math.PI };
+
+  // 度数 / 弧度：只影响三角函数的「进出」，不影响其它运算。
+  var DEG = true;
+  function toRad(x)   { return DEG ? x * Math.PI / 180 : x; }
+  function fromRad(x) { return DEG ? x * 180 / Math.PI : x; }
+
+  // 优先级：数字越大结合越紧。^ 用右结合（见下方 popWhile 的严格比较）。
+  var PREC = { '+': 1, '-': 1, '*': 2, '/': 2, '^': 4, '!': 5, 'u-': 3, 'u+': 3 };
+  var RIGHT = { '^': true, 'u-': true, 'u+': true };
+  var POSTFIX = { '!': true, '%': true };   // 后缀：阶乘 / 百分数（200×5% → 10）
+
+  function tokenize(src) {
+    var t = [], i = 0;
+    while (i < src.length) {
+      var c = src[i];
+
+      if (c === ' ' || c === '\t' || c === ',' ) { i++; continue; }   // 逗号当千分位忽略
+
+      if (c >= '0' && c <= '9' || c === '.') {
+        var j = i;
+        while (j < src.length && (src[j] >= '0' && src[j] <= '9' || src[j] === '.')) j++;
+        // 科学计数法：1e3 / 2.5e-4（e 后面必须紧跟数字或符号+数字，否则 e 是常量）
+        if (j < src.length && (src[j] === 'e' || src[j] === 'E')) {
+          var k = j + 1;
+          if (src[k] === '+' || src[k] === '-') k++;
+          if (src[k] >= '0' && src[k] <= '9') {
+            while (k < src.length && src[k] >= '0' && src[k] <= '9') k++;
+            j = k;
+          }
+        }
+        var num = src.slice(i, j);
+        if ((num.match(/\./g) || []).length > 1) throw new Error('数字格式错误: ' + num);
+        t.push({ type: 'num', value: parseFloat(num) });
+        i = j; continue;
+      }
+
+      if (/[a-zA-Z]/.test(c)) {
+        var m = i;
+        while (m < src.length && /[a-zA-Z0-9]/.test(src[m])) m++;
+        var name = src.slice(i, m).toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(CONST, name)) {
+          t.push({ type: 'num', value: CONST[name] });
+        } else if (Object.prototype.hasOwnProperty.call(FN1, name)) {
+          t.push({ type: 'fn', name: name });
+        } else {
+          throw new Error('未知的名称: ' + name);
+        }
+        i = m; continue;
+      }
+
+      if ('+-*/^%!()'.indexOf(c) >= 0) { t.push({ type: 'op', value: c }); i++; continue; }
+
+      // 界面按钮用的是排版符号，这里统一成 ASCII 再解析
+      if (c === '×') { t.push({ type: 'op', value: '*' }); i++; continue; }
+      if (c === '÷') { t.push({ type: 'op', value: '/' }); i++; continue; }
+      if (c === '−' || c === '–') { t.push({ type: 'op', value: '-' }); i++; continue; }
+
+      throw new Error('无法识别的字符: ' + c);
+    }
+    return t;
+  }
+
+  // 调度场：token 流 → 逆波兰(RPN)队列
+  function toRPN(tokens) {
+    var out = [], stack = [], prev = null;
+
+    for (var i = 0; i < tokens.length; i++) {
+      var tk = tokens[i];
+
+      if (tk.type === 'num') { out.push(tk); prev = tk; continue; }
+
+      if (tk.type === 'fn') { stack.push(tk); prev = tk; continue; }
+
+      if (tk.value === '(') { stack.push(tk); prev = tk; continue; }
+
+      if (tk.value === ')') {
+        while (stack.length && stack[stack.length - 1].value !== '(') out.push(stack.pop());
+        if (!stack.length) throw new Error('括号不匹配：多了一个右括号');
+        stack.pop();                                   // 弹出 '('
+        if (stack.length && stack[stack.length - 1].type === 'fn') out.push(stack.pop());
+        prev = tk; continue;
+      }
+
+      if (POSTFIX[tk.value]) {         // 后缀（阶乘、百分数）：不需要右操作数，直接进输出
+        out.push({ type: 'op', value: tk.value });
+        prev = tk; continue;
+      }
+
+      // 一元 +/−：仅当上一个 token 是「非值结尾」时为取负。
+      // 值结尾 = 数字/常量、右括号、后缀(! %)；其余（开头、左括号、二元或前缀运算符）= 非值结尾。
+      var prevIsValue = prev !== null &&
+        (prev.type === 'num' || prev.value === ')' ||
+         (prev.type === 'op' && POSTFIX[prev.value]));
+      var unary = (tk.value === '-' || tk.value === '+') && !prevIsValue;
+      var op = unary ? { type: 'op', value: 'u' + tk.value } : tk;
+
+      // 前缀运算符（一元 +/-）不参与弹出比较：它的操作数在右边还没读到，
+      // 此时弹出栈顶的 '^' 会让 2^-1 变成「2 的 ??? 次方」而报错。
+      if (!unary) {
+        while (stack.length) {
+          var top = stack[stack.length - 1];
+          if (top.value === '(' || top.type === 'fn') break;
+          var pTop = PREC[top.value], pNew = PREC[op.value];
+          if (pTop === undefined || pNew === undefined) break;
+          // 右结合运算符遇到同级时停止弹出，保证 2^3^2 = 2^(3^2)
+          if (RIGHT[op.value] ? pTop > pNew : pTop >= pNew) out.push(stack.pop());
+          else break;
+        }
+      }
+      stack.push(op);
+      prev = op;
+    }
+
+    while (stack.length) {
+      var s = stack.pop();
+      if (s.value === '(') throw new Error('括号不匹配：多了一个左括号');
+      out.push(s);
+    }
+    return out;
+  }
+
+  function factorial(n) {
+    if (n < 0 || Math.abs(n - Math.round(n)) > 1e-9) throw new Error('阶乘只接受非负整数');
+    if (n > 170) return Infinity;                      // 170! 已接近双精度上限
+    var r = 1;
+    for (var i = 2; i <= n; i++) r *= i;
+    return r;
+  }
+
+  function evalRPN(rpn) {
+    var st = [];
+    for (var i = 0; i < rpn.length; i++) {
+      var tk = rpn[i];
+
+      if (tk.type === 'num') { st.push(tk.value); continue; }
+
+      if (tk.type === 'fn') {
+        if (!st.length) throw new Error('函数 ' + tk.name + ' 缺少参数');
+        st.push(FN1[tk.name](st.pop()));
+        continue;
+      }
+
+      if (tk.value === 'u-') { if (!st.length) throw new Error('表达式不完整'); st.push(-st.pop()); continue; }
+      if (tk.value === 'u+') { if (!st.length) throw new Error('表达式不完整'); st.push(+st.pop()); continue; }
+      if (tk.value === '!')  { if (!st.length) throw new Error('表达式不完整'); st.push(factorial(st.pop())); continue; }
+      // 百分号是后缀：5% = 0.05，所以 200×5% = 200×0.05 = 10
+      if (tk.value === '%')  { if (!st.length) throw new Error('表达式不完整'); st.push(st.pop() / 100); continue; }
+
+      if (st.length < 2) throw new Error('表达式不完整');
+      var b = st.pop(), a = st.pop();
+      switch (tk.value) {
+        case '+': st.push(a + b); break;
+        case '-': st.push(a - b); break;
+        case '*': st.push(a * b); break;
+        case '/':
+          if (b === 0) throw new Error('除以零');
+          st.push(a / b); break;
+        case '^': st.push(Math.pow(a, b)); break;
+        default: throw new Error('未知的运算符: ' + tk.value);
+      }
+    }
+    if (st.length !== 1) throw new Error('表达式不完整');
+    return st[0];
+  }
+
+  function evaluate(src) {
+    var tokens = tokenize(src);
+    if (!tokens.length) throw new Error('空表达式');
+    var v = evalRPN(toRPN(tokens));
+    if (typeof v !== 'number' || Number.isNaN(v)) throw new Error('结果无定义');
+    return v;
+  }
+
+  // 好看的输出：整数不带小数点，小数按有效位裁剪，避免 0.30000000000000004
+  function fmt(v) {
+    if (!isFinite(v)) return v > 0 ? '∞' : (v < 0 ? '-∞' : 'NaN');
+    if (v === 0) return '0';
+    var a = Math.abs(v);
+    if (a >= 1e15 || a < 1e-9) return v.toExponential(9).replace(/\.?0+e/, 'e');
+    var s = String(parseFloat(v.toPrecision(13)));
+    return s;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     2. 界面状态
+     ══════════════════════════════════════════════════════════════ */
+  var HKEY = 'cryv888moe.calc.v1';                 // 历史 + 角度模式 + 记忆值
+  var exprEl = document.getElementById('expr');
+  var outEl  = document.getElementById('out');
+  var angEl  = document.getElementById('ang');
+  var memEl  = document.getElementById('mem');
+  var histEl = document.getElementById('hist');
+  var padEl  = document.getElementById('pad');
+
+  var state = { expr: '', out: '0', outClass: '', ans: 0, mem: 0, hasMem: false, hist: [] };
+
+  var store = (function () {
+    try {
+      var t = '__probe__';
+      window.localStorage.setItem(t, '1'); window.localStorage.removeItem(t);
+      return { get: function (k) { return window.localStorage.getItem(k); },
+               set: function (k, v) { window.localStorage.setItem(k, v); } };
+    } catch (e) {
+      return { get: function () { return null; }, set: function () {} };  // 隐私模式降级
+    }
+  })();
+
+  load();
+  render();
+
+  function load() {
+    try {
+      var raw = store.get(HKEY);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (Array.isArray(d.hist)) state.hist = d.hist.slice(0, 30);
+      if (typeof d.mem === 'number') { state.mem = d.mem; state.hasMem = true; }
+      if (d.deg === false) DEG = false;
+    } catch (e) { /* 存储被改坏就当没有，不阻塞页面 */ }
+  }
+  function save() {
+    try {
+      store.set(HKEY, JSON.stringify({ hist: state.hist.slice(0, 30), mem: state.mem, deg: DEG }));
+    } catch (e) { /* 配额满也照常用 */ }
+  }
+
+  function render() {
+    exprEl.innerHTML = escapeHtml(state.expr) + '<span class="caret">▏</span>';
+    exprEl.scrollLeft = exprEl.scrollWidth;
+    outEl.textContent = state.out;
+    outEl.className = 'out ' + state.outClass;
+    angEl.textContent = DEG ? 'DEG' : 'RAD';
+    angEl.classList.toggle('on', DEG);
+    memEl.classList.toggle('on', state.hasMem);
+    renderHist();
+  }
+
+  function renderHist() {
+    if (!state.hist.length) {
+      histEl.innerHTML = '<li class="empty">还没有计算记录 — 算一次就会出现在这里（点一条可复用）。</li>';
+      return;
+    }
+    histEl.innerHTML = state.hist.map(function (h, i) {
+      return '<li data-i="' + i + '" title="点击把表达式放回输入框">' +
+             '<span>' + escapeHtml(h.expr) + ' =</span><b>' + escapeHtml(h.res) + '</b></li>';
+    }).join('');
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function insert(text) {
+    // 结果已被 AC 之外的操作清掉时，先恢复为「接着算」的状态
+    state.expr += text;
+    state.outClass = '';
+    preview();
+    render();
+  }
+
+  function preview() {
+    // 边打边算：能算出来就灰字预览，算不出来就静默（不弹红，避免打字过程中刷屏报错）
+    if (!state.expr.trim()) { state.out = '0'; state.outClass = ''; return; }
+    try {
+      state.out = fmt(evaluate(state.expr));
+      state.outClass = '';
+    } catch (e) {
+      state.out = '';
+      state.outClass = '';
+    }
+  }
+
+  // 末尾那个正在输入的数字（含小数与科学计数法）
+  function _tailNum() {
+    var m = state.expr.match(/(\d+\.?\d*(?:[eE][+-]?\d+)?)$/);
+    return m ? { num: m[1], start: state.expr.length - m[1].length, head: state.expr.slice(0, -m[1].length) } : null;
+  }
+
+  // ± ：翻转「当前数字」的符号。单独数字 5→-5→5；紧跟运算符后 10+5→10+-5。
+  function negate() {
+    var t = _tailNum();
+    if (!t) {
+      var tail = state.expr.slice(-1);
+      if (state.expr === '' || '+*/^('.indexOf(tail) >= 0) insert('-');
+      return;
+    }
+    // 已经是「前缀负号」形式（-5 或 10+-5 的 -5）→ 去掉还原成正
+    if (t.head.slice(-1) === '-' && (t.head.length === 1 || '+*/^('.indexOf(t.head.slice(-2, -1)) >= 0)) {
+      state.expr = t.head.slice(0, -1) + t.num;
+    } else if (t.head === '') {
+      state.expr = '-' + t.num;                       // 单独数字
+    } else if (/[0-9.e)%!]/.test(t.head.slice(-1))) {
+      state.expr = t.head + ' * (-' + t.num + ')';    // 数字紧跟在另一个值后面 → 显式乘法
+    } else {
+      state.expr = t.head + '-' + t.num;              // 紧跟运算符/左括号 → 前缀负号
+    }
+    preview(); render();
+  }
+
+  // 1/x ：先输入数字，再按这个键 → 把末尾数字包成 1/(n)
+  function recip() {
+    var t = _tailNum();
+    if (!t) { insert('1/('); return; }
+    state.expr = t.head + '1/(' + t.num + ')';
+    preview(); render();
+  }
+
+  function back() {
+    if (!state.expr) return;
+    // 整体删掉一个函数名（如 "sqrt(" 一次删 5 个字符），比逐字符退格好用
+    var m = state.expr.match(/([a-z]+)\($/);
+    state.expr = m ? state.expr.slice(0, -m[0].length) : state.expr.slice(0, -1);
+    preview(); render();
+  }
+
+  function clearAll() {
+    state.expr = ''; state.out = '0'; state.outClass = '';
+    render();
+  }
+
+  function equals() {
+    if (!state.expr.trim()) return;
+    try {
+      var v = evaluate(state.expr);
+      var r = fmt(v);
+      state.ans = v;
+      state.hist.unshift({ expr: state.expr, res: r });
+      state.hist = state.hist.slice(0, 30);
+      save();
+      state.expr = r;                       // 结果留在输入框，可继续运算
+      state.out = r;
+      state.outClass = 'ok';
+      render();
+    } catch (err) {
+      state.out = err.message || '错误';
+      state.outClass = 'err';
+      render();
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     3. 按钮与键盘
+     ══════════════════════════════════════════════════════════════ */
+  padEl.addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    var a = btn.dataset.a, k = btn.dataset.k;
+
+    if (a === 'ac')   { clearAll(); return; }
+    if (a === 'back') { back(); return; }
+    if (a === 'eq')   { equals(); return; }
+    if (a === 'neg')  { negate(); return; }
+    if (a === 'sqr')  { insert('^2'); return; }
+    if (a === 'inv')  { recip(); return; }
+    if (a === 'ans')  { insert(fmt(state.ans)); return; }
+
+    if (a === 'mem-add') {
+      try { state.mem += evaluate(state.expr || '0'); state.hasMem = true; }
+      catch (err) { /* 表达式不合法时不记忆，也不打断输入 */ }
+      save(); render(); return;
+    }
+    if (a === 'mem-recall') { insert(fmt(state.mem)); return; }
+
+    if (k !== undefined) insert(k);
+  });
+
+  histEl.addEventListener('click', function (e) {
+    var li = e.target.closest('li[data-i]');
+    if (!li) return;
+    var h = state.hist[+li.dataset.i];
+    if (!h) return;
+    state.expr = h.expr; state.outClass = '';
+    preview(); render();
+  });
+
+  document.getElementById('clr-hist').addEventListener('click', function () {
+    if (!state.hist.length) return;
+    if (!window.confirm('清空全部 ' + state.hist.length + ' 条计算记录？')) return;
+    state.hist = []; save(); render();
+  });
+
+  angEl.addEventListener('click', function () {
+    DEG = !DEG; save(); preview(); render();
+  });
+
+  var KEYMAP = { '*': '*', '/': '/', '+': '+', '-': '-', '^': '^', '(': '(', ')': ')',
+                 '.': '.', '%': '%', '!': '!' };
+
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    if (e.key === 'Enter' || e.key === '=') { e.preventDefault(); equals(); return; }
+    if (e.key === 'Backspace') { e.preventDefault(); back(); return; }
+    if (e.key === 'Escape')    { e.preventDefault(); clearAll(); return; }
+    if (e.key === 'Delete')    { e.preventDefault(); clearAll(); return; }
+
+    if (e.key >= '0' && e.key <= '9') { e.preventDefault(); insert(e.key); return; }
+    if (Object.prototype.hasOwnProperty.call(KEYMAP, e.key)) {
+      e.preventDefault(); insert(KEYMAP[e.key]); return;
+    }
+  });
+
+  // 多标签页共用一个 localStorage：另一个标签清空历史后，这个标签也跟着更新
+  window.addEventListener('storage', function (e) {
+    if (e.key !== HKEY) return;
+    load(); render();
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>嵌套井字棋 · 双人同屏 / 联机</title>
+<meta name="description" content="嵌套井字棋（Ultimate Tic-Tac-Toe）：3×3 个子棋盘组成大棋盘，你落在哪一格，就把对手送进对应的子盘；赢下三个子盘连成一线者胜整局。双人同屏或联机对战，含完整规则与边界场景说明。">
+<style>
+  :root{--bg:#0f1226;--card:#171b34;--line:#2a2f52;--fg:#e8ebff;--muted:#9aa0c8;--accent:#7c8cff;--hot:#ff6b8a;--ok:#35d07f;--gold:#ffd27a;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:20px 14px 50px;}
+  a{color:var(--accent);}
+  h1{font-size:26px;text-align:center;margin:6px 0 2px;letter-spacing:2px;}
+  .sub{text-align:center;font-size:13px;color:var(--muted);margin-bottom:8px;}
+  .back{display:block;text-align:center;font-size:13px;margin-bottom:16px;text-decoration:none;}
+  .back:hover{text-decoration:underline;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+  .card h3{margin:0 0 10px;font-size:15px;color:var(--accent);}
+  button{font-family:inherit;font-size:14px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;font-weight:600;}
+  button:hover{background:#6a7aee;}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);}
+  button.ghost:hover{background:#20254a;}
+  button:disabled{background:#3a3f5e;color:#8a90b5;cursor:not-allowed;}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0;}
+  .grid{display:grid;grid-template-columns:minmax(320px,1fr) 1fr;gap:16px;align-items:start;}
+  @media(max-width:820px){.grid{grid-template-columns:1fr;}}
+  .boardwrap{background:#12162e;border:1px solid var(--line);border-radius:10px;padding:8px;display:inline-block;max-width:100%;}
+  canvas{display:block;width:100%;height:auto;touch-action:manipulation;cursor:pointer;border-radius:6px;}
+  .turn{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  .pm{width:14px;height:14px;border-radius:4px;display:inline-block;}
+  .pm.x{background:#7c8cff;}
+  .pm.o{background:#ff6b8a;}
+  .info{font-size:13px;color:var(--muted);}
+  .msg{min-height:22px;font-size:13.5px;color:var(--gold);margin-top:8px;}
+  .hint{font-size:13px;color:#cfd4ff;background:#141833;border-left:3px solid var(--accent);border-radius:6px;padding:7px 11px;margin:8px 0;}
+  .score{display:flex;gap:18px;font-size:13.5px;margin-top:6px;}
+  .score b{font-size:17px;}
+  .score .sx{color:#7c8cff;} .score .so{color:#ff6b8a;}
+  .rules{font-size:14px;line-height:1.85;}
+  .rules h4{margin:16px 0 6px;font-size:14.5px;color:var(--gold);}
+  .rules ol,.rules ul{margin:6px 0;padding-left:22px;}
+  .rules li{margin:4px 0;}
+  .rules code{background:#0c0f22;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:13px;}
+  .kbd{background:#0c0f22;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;font-size:12.5px;}
+  .note{background:#141833;border-left:3px solid var(--hot);padding:8px 12px;border-radius:6px;font-size:13px;color:#d7dbff;margin:8px 0;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0;}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;}
+  th{background:#141833;color:var(--gold);}
+</style>
+<link rel="stylesheet" href="../_net.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>嵌套井字棋</h1>
+  <div class="sub">3×3 个子棋盘 · 你落在哪一格，就把对手送进对应的子盘 · 双人同屏 / 联机对战</div>
+  <a class="back" href="../../index.html">← 返回游戏列表</a>
+
+  <div class="netpanel" id="netPanel">
+    <h3>联机房间</h3>
+    <div class="netrow">
+      <input id="netName" placeholder="你的昵称" maxlength="12">
+      <input id="netRoom" placeholder="房号" maxlength="4">
+      <button id="joinRoomBtn">加入房间</button>
+      <button class="ghost" id="createRoomBtn">创建房间</button>
+    </div>
+    <div class="netrow" id="netRoomInfo" style="display:none;">
+      <input id="roomLink" readonly>
+      <button class="ghost" id="copyLinkBtn">复制邀请链接</button>
+      <button class="ghost" id="leaveBtn">离开</button>
+    </div>
+    <div class="netmeta" id="netStatus"></div>
+    <div class="seats" id="lobbyList"></div>
+    <div class="netrow" id="netHostBar" style="display:none;">
+      <button id="startNetBtn">开始对局</button>
+    </div>
+    <div class="netrow" id="netGuestBar" style="display:none;">
+      <span class="netmeta">等待房主开始对局…</span>
+    </div>
+    <div id="chatCard" style="display:none;">
+      <div class="netrow"><input id="chatInput" placeholder="说点什么…" style="flex:1;"><button class="ghost" id="chatSend">发送</button></div>
+      <div class="chatlist" id="chatList"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <div class="turn"><span id="mkTurn" class="pm x"></span><span id="turnTxt">X 行棋</span></div>
+        <div class="info">手数 <span id="moveNo">0</span></div>
+      </div>
+      <div class="hint" id="hint">开局：X 可以先落在 81 格里的任意一格。</div>
+      <div class="boardwrap"><canvas id="cv" width="720" height="720"></canvas></div>
+      <div class="score">
+        <span class="sx">X 已拿下子盘：<b id="scoreX">0</b></span>
+        <span class="so">O 已拿下子盘：<b id="scoreO">0</b></span>
+      </div>
+      <div class="msg" id="msg"></div>
+      <div class="row">
+        <button class="ghost" id="btnUndo">悔棋</button>
+        <button class="ghost" id="btnNew">重新开局</button>
+      </div>
+      <div class="info" style="margin-top:6px;">点击格子落子：<b>你落的那一格，决定对手下一步只能在哪一块子盘里走</b>。</div>
+    </div>
+
+    <div class="card">
+      <h3>怎么看这盘棋</h3>
+      <ul class="rules" style="padding-left:20px;">
+        <li><b>大棋盘</b>：整个画面就是 3×3 的大棋盘，它的每一个格子，本身又是一块 3×3 的小井字棋（子盘）。</li>
+        <li><b>高亮的那一块</b>＝当前行棋方唯一能落子的子盘。边框亮黄＝可落子；已画上大 X / 大 O / 「平」的子盘＝已经结束，谁都不能再进。</li>
+        <li><b>金色小方框</b>＝刚才那一手落在哪一格。</li>
+        <li><b>你的目标分两层</b>：先在某个子盘里连成三连（拿下这块子盘），再用三块自己的子盘在大棋盘上连成一线（赢下整局）。</li>
+      </ul>
+      <div class="note">
+        <b>一句话记法</b>：<b>落点即指路</b>——我把你送到哪，你就在哪下；那块已经打完了，你就自由了。
+      </div>
+      <h3 style="margin-top:14px;">对局操作</h3>
+      <ul class="rules" style="padding-left:20px;">
+        <li><b>落子</b>：直接点空格子（鼠标悬停会预览棋子颜色）。</li>
+        <li><b>悔棋</b>：逐步回退，直到你满意的局面。</li>
+        <li><b>重新开局</b>：清盘重来，X 先手。</li>
+        <li><b>联机</b>：上面「创建房间」→ 复制邀请链接发给朋友 → 对方打开即入座 → 房主点「开始对局」。房主掉线时房间内另一位会自动接管。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card rules">
+    <h3>嵌套井字棋完整规则</h3>
+
+    <h4>1. 棋盘与棋子</h4>
+    <p>棋盘是<b>「大 3×3」套「小 3×3」</b>：15 条横线竖线把平面切成 9 块子盘，每块子盘内部又是一个普通的 3×3 井字棋。总共有 <b>9 块子盘 × 9 格 = 81 个格子</b>。</p>
+    <p>双方各执一种棋子：<b>X 先手，O 后手</b>，轮流落一子，落下后不得移动。开局棋盘全空。</p>
+    <p><b>反例／边界场景</b>：它<b>不是</b>「在 9×9 大格子上玩五连」——子盘与子盘之间没有连线，横竖斜的连线只在<b>每一块 3×3 子盘内部</b>，以及<b>子盘与子盘组成的那个 3×3 大棋盘上</b>各算一次。</p>
+
+    <h4>2. 核心规则：落点即指路（强制指定子盘）</h4>
+    <p>你在某块子盘的<b>第 c 格</b>落子，对手下一步就<b>必须</b>在<b>第 c 块子盘</b>里落子——因为子盘在大棋盘里的排布和格子在子盘里的排布都是 3×3 行优先，两者编号天然对齐。</p>
+    <p>例：你在<b>左上子盘的右上角</b>（格 3）落子 → 对手必须去<b>右上子盘</b>（块 3）落子。对手在那里的落点，又决定你的下一块子盘，如此往复。</p>
+    <p><b>反例</b>：如果对手被指定的子盘已经结束，他<b>不会</b>因此跳过回合、更不会判负——见第 4 条。</p>
+
+    <h4>3. 子盘的胜负（局部三连）</h4>
+    <p>在某块子盘内，先让自己的棋子横、竖、斜连成三子一线者，<b>拿下这块子盘</b>。此后该子盘永久封闭，双方都不能再往里落子，它在大棋盘上永久归属该方。</p>
+    <p><b>反例</b>：在子盘里连成三连<b>只赢下这一块</b>，整局并没有结束——很多人第一次玩都会在这里误判胜负。</p>
+
+    <h4>4. 强制失效：被送进已结束的子盘 → 自由走子</h4>
+    <p>若对手被指定的子盘<b>已经结束</b>（已被某一方拿下，或已下满成平局），强制失效，该玩家可以<b>任意选择一块尚未结束的子盘</b>落子（"自由走子"）。</p>
+    <p><b>反例／边界</b>：这不是"弃权"也不是"罚停一手"，而是一步<b>自由棋</b>。反过来，自由走子的一方<b>也不能</b>钻进已结束的子盘去捡便宜——已结束的子盘对双方都封闭。</p>
+
+    <h4>5. 全局胜负（大棋盘三连）</h4>
+    <p>当你的<b>三块已拿下的子盘</b>在大棋盘上横、竖、斜连成一线，你<b>赢下整局</b>，对局立即结束。</p>
+    <p><b>边界场景</b>：如果某一手同时让你在大棋盘上连成两条线（例如落子后一次拿下两块相邻子盘），同样是<b>先达成者胜</b>——除非对手在你之前就已经连成一线。</p>
+
+    <h4>6. 平局与「死格」</h4>
+    <ul>
+      <li><b>子盘平局</b>：一块子盘 9 格下满且无人三连 → 该子盘平局，画成灰色「平」，永久封闭。</li>
+      <li><b>死格</b>：平局子盘在大棋盘上属于"谁都不占"，<b>任何连线都不能穿过它</b>。举例：大棋盘四个角都要串起来才成一线的说法在这里不成立——斜线穿过的中间格子若是平局，这条斜线就废了。</li>
+      <li><b>整局平局</b>：9 块子盘全部结束，且没有任何一方在大棋盘上连成一线 → 整局平局。</li>
+      <li><b>不可能出现的局面</b>：不会出现"还有空格子但双方都无处可下"——只要还有一块子盘没结束，其中必然有空格可落。</li>
+    </ul>
+    <p><b>反例</b>：<u>平局子盘不等于中立格可以让对手穿过去</u>。它是一堵墙，不是一块砖。</p>
+
+    <h4>7. 常见误解速查</h4>
+    <table>
+      <tr><th>误解</th><th>实际规则</th></tr>
+      <tr><td>子盘里三连就赢整局了</td><td>只赢下那一块子盘，整局要三块子盘连成一线</td></tr>
+      <tr><td>被送进已结束的子盘就无棋可走</td><td>强制失效，改为自由走子（可下任意未结束子盘）</td></tr>
+      <tr><td>平局的子盘还能再落子</td><td>不能，平局后该子盘永久封闭</td></tr>
+      <tr><td>大棋盘连线可以穿过平局格</td><td>不能，平局格对双方都不算，连线必须三格全归同一方</td></tr>
+      <tr><td>"落点指路"只在对手没得选时才生效</td><td>它是默认规则，全程生效，除非目标子盘已结束</td></tr>
+      <tr><td>先手第一步也得被指路</td><td>先手第一步是自由的，可以落在 81 格里任意一格</td></tr>
+    </table>
+
+    <h4>8. 一点策略（可选读）</h4>
+    <ul>
+      <li>落子时同时想三件事：<b>我在哪块子盘得分</b>、<b>我把对手送到哪里</b>、<b>对手在那儿能不能反手赢我一条线</b>。</li>
+      <li>把对手送进你已经占优、或已经被你拿下（此时他反而自由）之外的他处，要谨慎——"送他一张自由棋"往往是代价。</li>
+      <li>中盘的要点是<b>抢大棋盘的两个方向</b>：同时挂住横线和斜线两块子的位置，比单纯多赢一块子盘更值钱。</li>
+      <li>残局记住第 6 条：一旦某块子盘平掉，穿过它的那条线就永久作废，双方的取舍都会随之改变。</li>
+    </ul>
+
+    <h4>9. 本页的实现说明</h4>
+    <p>本页按上面全部规则判定，包括第 4 条的强制失效、第 6 条的死格与整局平局。<b>没有</b>加入计时、认输、和棋协议这类对局外的约定；联机对局的胜负判定由房主浏览器统一裁定，其他人同步同一份棋局状态。</p>
+  </div>
+</div>
+
+<script src="../_record.js"></script>
+<script src="../_net.js"></script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id && id[0]==='#' ? id.slice(1) : id);
+  const W = 720, OUT = 26, GAP = 16;
+  const SUB = (W - OUT*2 - GAP*2) / 3;      // 子盘边长
+  const CELL = SUB / 3;
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+
+  const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  const DRAW = 3;                            // subWin 里的“平局”标记
+  const NAME = {1:'X', 2:'O'};
+  const CX = '#7c8cff', CO = '#ff6b8a';
+
+  let cells, subWin, turn, next, metaWin, moveNo, hist, last, hover;
+
+  function reset(){
+    cells  = new Array(81).fill(0);          // cells[b*9+c]
+    subWin = new Array(9).fill(0);           // 0 未定 / 1 X / 2 O / 3 平局
+    turn = 1; next = -1; metaWin = 0; moveNo = 0; hist = []; last = null; hover = null;
+    setMsg('');
+    render();
+  }
+
+  /* ---------- 规则内核 ---------- */
+  function subArr(b){ return cells.slice(b*9, b*9+9); }
+  function full(a){ return a.every(v => v !== 0); }
+  function lineWin(a){
+    for (let i=0;i<LINES.length;i++){
+      const L = LINES[i], v = a[L[0]];
+      if (v && v !== DRAW && v === a[L[1]] && v === a[L[2]]) return v;
+    }
+    return 0;
+  }
+  function metaLineOf(v){
+    for (let i=0;i<LINES.length;i++){
+      const L = LINES[i], w = v[L[0]];
+      if (w && w !== DRAW && w === v[L[1]] && w === v[L[2]]) return L;
+    }
+    return null;
+  }
+  // 返回不合法原因；合法返回 null
+  function why(b,c){
+    if (metaWin) return '对局已经结束，点「重新开局」再战。';
+    if (subWin[b]) return '这块子盘已经结束（' + (subWin[b]===DRAW ? '平局' : NAME[subWin[b]] + ' 拿下') + '），换一块。';
+    if (cells[b*9+c]) return '这一格已经有子了。';
+    if (next >= 0 && b !== next) return '落点指路：你必须落在高亮的子盘 ' + (next+1) + ' 里。';
+    return null;
+  }
+  function snap(){
+    return { cells: cells.slice(), subWin: subWin.slice(), turn: turn, next: next,
+             metaWin: metaWin, moveNo: moveNo, last: last ? {b:last.b, c:last.c, p:last.p} : null };
+  }
+  function restore(s){
+    cells = s.cells.slice(); subWin = s.subWin.slice(); turn = s.turn;
+    next = s.next; metaWin = s.metaWin; moveNo = s.moveNo; last = s.last;
+  }
+
+  function apply(b,c){
+    hist.push(snap());
+    const who = turn;
+    cells[b*9+c] = who;
+    moveNo++;
+    last = { b: b, c: c, p: who };
+
+    const a = subArr(b);
+    const lw = lineWin(a);
+    if (lw) subWin[b] = lw;
+    else if (full(a)) subWin[b] = DRAW;
+
+    let mw = 0;
+    if (metaLineOf(subWin)) mw = lineWin(subWin);
+    else if (subWin.every(v => v !== 0)) mw = DRAW;
+    metaWin = mw;
+
+    next = (subWin[c] === 0) ? c : -1;       // 送对手去“格号对应”的子盘；那块已结束则自由
+    turn = 3 - who;
+
+    let m = NAME[who] + ' 落在子盘 ' + (b+1) + ' 第 ' + (c+1) + ' 格';
+    if (metaWin === DRAW) m = '九块子盘全部结束，谁都没能在大棋盘上连成一线 —— 整局平局。';
+    else if (metaWin) m = NAME[who] + ' 拿下子盘 ' + (b+1) + '，并在大棋盘上连成一线 —— ' + NAME[who] + ' 赢下整局！';
+    else if (lw) m += ' —— 拿下子盘 ' + (b+1) + '！';
+    else if (subWin[b] === DRAW) m += ' —— 子盘 ' + (b+1) + ' 下满，平局，永久封闭。';
+    else if (next < 0) m += ' —— 目标子盘已结束，强制失效，' + NAME[turn] + ' 可任选一块未结束的子盘。';
+    else m += ' —— ' + NAME[turn] + ' 必须落在子盘 ' + (next+1) + '。';
+    setMsg(m);
+    render();
+  }
+
+  function undo(){
+    if (!hist.length){ setMsg('没有可悔的棋了。'); return; }
+    restore(hist.pop());
+    setMsg('已悔一步。');
+    render();
+  }
+  function setMsg(t){ document.getElementById('msg').textContent = t || ''; }
+
+  /* ---------- 绘制 ---------- */
+  function rr(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);     ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+  function subOrigin(b){ return { x: OUT + (b%3)*(SUB+GAP), y: OUT + Math.floor(b/3)*(SUB+GAP) }; }
+  function cellCenter(b,c){
+    const o = subOrigin(b);
+    return { x: o.x + (c%3 + 0.5)*CELL, y: o.y + (Math.floor(c/3) + 0.5)*CELL };
+  }
+  function drawX(cx,cy,s,w,alpha){
+    ctx.save(); ctx.globalAlpha = (alpha==null?1:alpha);
+    ctx.strokeStyle = CX; ctx.lineWidth = w; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx-s,cy-s); ctx.lineTo(cx+s,cy+s);
+    ctx.moveTo(cx-s,cy+s); ctx.lineTo(cx+s,cy-s); ctx.stroke(); ctx.restore();
+  }
+  function drawO(cx,cy,r,w,alpha){
+    ctx.save(); ctx.globalAlpha = (alpha==null?1:alpha);
+    ctx.strokeStyle = CO; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke(); ctx.restore();
+  }
+  function drawMark(p,cx,cy,s,w,alpha){ if (p===1) drawX(cx,cy,s,w,alpha); else drawO(cx,cy,s*1.12,w,alpha); }
+
+  /* 本局结束时把对局记录落盘（详见 games/_record.js）。render() 每帧都会喊它，
+     模块内部保证同一局只记一次。 */
+  function recTick(){
+    if (!window.GAME_RECORD) return;
+    GAME_RECORD.tick({
+      over: () => !!metaWin,
+      game: 'ultimate', name: '嵌套井字棋',
+      result: () => { const m = document.getElementById('msg'); return m ? m.textContent : ''; },
+      players: () => {
+        const st = (BOARD_NET && BOARD_NET.net.seats) || [];
+        return [1, 2].map((p, i) =>
+          (st[i] && st[i].name) ? st[i].name : (NETMODE() ? '座位' + (i + 1) : NAME[p]));
+      }
+    });
+  }
+
+  function render(){
+    recTick();
+    ctx.fillStyle = '#12162e'; ctx.fillRect(0,0,W,W);
+    const playing = !metaWin, free = playing && next < 0;
+
+    for (let b=0;b<9;b++){
+      const o = subOrigin(b), done = subWin[b] !== 0;
+      const active = playing && !done && (next === b || free);
+      ctx.fillStyle = done ? '#141830' : (active ? '#1d2347' : '#191e3a');
+      rr(o.x,o.y,SUB,SUB,12); ctx.fill();
+      ctx.lineWidth = active ? 3 : 1.4;
+      ctx.strokeStyle = active ? '#ffd27a' : '#2a2f52';
+      rr(o.x,o.y,SUB,SUB,12); ctx.stroke();
+
+      ctx.strokeStyle = done ? '#1e2340' : '#2a2f52'; ctx.lineWidth = 1.2;
+      for (let i=1;i<3;i++){
+        ctx.beginPath(); ctx.moveTo(o.x+i*CELL, o.y+10); ctx.lineTo(o.x+i*CELL, o.y+SUB-10); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(o.x+10, o.y+i*CELL); ctx.lineTo(o.x+SUB-10, o.y+i*CELL); ctx.stroke();
+      }
+    }
+
+    for (let b=0;b<9;b++) for (let c=0;c<9;c++){
+      const v = cells[b*9+c]; if (!v) continue;
+      const p = cellCenter(b,c);
+      drawMark(v, p.x, p.y, CELL*0.26, 5, subWin[b] ? 0.3 : 1);
+    }
+
+    if (hover && playing && why(hover.b, hover.c) === null){
+      const p = cellCenter(hover.b, hover.c);
+      ctx.fillStyle = turn === 1 ? 'rgba(124,140,255,.22)' : 'rgba(255,107,138,.22)';
+      rr(p.x-CELL*0.36, p.y-CELL*0.36, CELL*0.72, CELL*0.72, 8); ctx.fill();
+    }
+
+    for (let b=0;b<9;b++){
+      const sw = subWin[b]; if (!sw) continue;
+      const o = subOrigin(b);
+      ctx.fillStyle = 'rgba(15,18,38,.72)';
+      rr(o.x,o.y,SUB,SUB,12); ctx.fill();
+      if (sw === DRAW){
+        ctx.fillStyle = '#9aa0c8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '600 ' + Math.round(SUB*0.24) + 'px -apple-system,"Segoe UI","Microsoft YaHei",sans-serif';
+        ctx.fillText('平', o.x+SUB/2, o.y+SUB/2);
+      } else {
+        drawMark(sw, o.x+SUB/2, o.y+SUB/2, SUB*0.25, 13, 0.8);
+      }
+    }
+
+    if (last){
+      const p = cellCenter(last.b, last.c);
+      ctx.strokeStyle = '#ffd27a'; ctx.lineWidth = 2;
+      rr(p.x-CELL*0.42, p.y-CELL*0.42, CELL*0.84, CELL*0.84, 8); ctx.stroke();
+    }
+
+    if (metaWin === 1 || metaWin === 2){
+      const L = metaLineOf(subWin);
+      if (L){
+        const a = subOrigin(L[0]), z = subOrigin(L[2]);
+        ctx.save(); ctx.globalAlpha = .9;
+        ctx.strokeStyle = metaWin === 1 ? CX : CO; ctx.lineWidth = 10; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(a.x+SUB/2, a.y+SUB/2); ctx.lineTo(z.x+SUB/2, z.y+SUB/2); ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    $('#mkTurn').className = 'pm ' + (turn === 1 ? 'x' : 'o');
+    $('#turnTxt').textContent = metaWin ? (metaWin === DRAW ? '整局平局' : NAME[metaWin] + ' 获胜') : (NAME[turn] + ' 行棋');
+    $('#moveNo').textContent = moveNo;
+    $('#scoreX').textContent = subWin.filter(v => v === 1).length;
+    $('#scoreO').textContent = subWin.filter(v => v === 2).length;
+    const hint = $('#hint');
+    if (metaWin === DRAW) hint.textContent = '九块子盘全部结束，谁都没能连成一线 —— 整局平局。点「重新开局」再战。';
+    else if (metaWin) hint.textContent = NAME[metaWin] + ' 的三块子盘连成一线，赢下整局 —— 点「重新开局」再战。';
+    else if (next >= 0) hint.textContent = '落点指路：' + NAME[turn] + ' 必须落在高亮的子盘 ' + (next+1) + ' 里。';
+    else if (moveNo === 0) hint.textContent = '开局：' + NAME[turn] + ' 可以先落在 81 格里的任意一格 —— 你点哪一格，就把对手送进对应的那块子盘。';
+    else hint.textContent = '目标子盘已结束，强制失效 —— ' + NAME[turn] + ' 可任选一块未结束的子盘。';
+  }
+
+  /* ---------- 交互 ---------- */
+  function hitTest(e){
+    const rect = cv.getBoundingClientRect();
+    const k = W / rect.width;
+    const px = (e.clientX - rect.left) * k, py = (e.clientY - rect.top) * k;
+    for (let b=0;b<9;b++){
+      const o = subOrigin(b);
+      if (px < o.x || px > o.x+SUB || py < o.y || py > o.y+SUB) continue;
+      const cx = Math.max(0, Math.min(2, Math.floor((px-o.x)/CELL)));
+      const cy = Math.max(0, Math.min(2, Math.floor((py-o.y)/CELL)));
+      return { b: b, c: cy*3 + cx };
+    }
+    return null;
+  }
+
+  cv.addEventListener('click', function(e){
+    if (!metaWin && NETMODE() && mySide() !== turn){ setMsg('现在是对方回合，等对手落子。'); return; }
+    const h = hitTest(e); if (!h) return;
+    const err = why(h.b, h.c);
+    if (err){ setMsg(err); return; }
+    playOrRelay(h.b, h.c);
+  });
+  cv.addEventListener('mousemove', function(e){
+    const h = hitTest(e);
+    const same = (h && hover && h.b === hover.b && h.c === hover.c) || (!h && !hover);
+    hover = h;
+    if (!same) render();
+  });
+  cv.addEventListener('mouseleave', function(){ hover = null; render(); });
+
+  $('#btnUndo').onclick = function(){
+    if (NETMODE()){ BOARD_NET.sendControl({ type:'undo' }); return; }
+    undo();
+  };
+  $('#btnNew').onclick = function(){
+    if (NETMODE()){ if (confirm('确认重新开局？当前棋局将清空。')) BOARD_NET.sendControl({ type:'new' }); return; }
+    if (confirm('确认重新开局？当前棋局将清空。')) reset();
+  };
+
+  /* ===================== 联机层挂接 ===================== */
+  let BOARD_NET = null;
+  const NETMODE = () => !!(BOARD_NET && BOARD_NET.isOnline());
+  const mySide = () => BOARD_NET ? (BOARD_NET.mySide() == null ? 0 : BOARD_NET.mySide()) : 0;
+
+  function playOrRelay(b,c){
+    if (NETMODE()){
+      if (mySide() !== turn){ setMsg('现在是对方回合。'); return; }
+      BOARD_NET.sendMove({ b: b, c: c });
+      return;
+    }
+    apply(b,c);
+  }
+  function hostPlace(b,c){
+    if (why(b,c)) return false;
+    apply(b,c);
+    return true;
+  }
+  function snapshotState(){
+    return { cells: cells.slice(), subWin: subWin.slice(), turn: turn, next: next,
+             metaWin: metaWin, moveNo: moveNo, last: last,
+             msg: document.getElementById('msg').textContent || '' };
+  }
+  function loadState(s){
+    if (!s) return;
+    cells = (s.cells||[]).slice(); subWin = (s.subWin||[]).slice();
+    turn = s.turn||1; next = (s.next==null?-1:s.next); metaWin = s.metaWin||0;
+    moveNo = s.moveNo||0; last = s.last||null; hover = null;
+    setMsg(s.msg||'');
+    render();
+  }
+
+  const adapter = {
+    seatCount: () => 2,
+    initGame: () => { reset(); return snapshotState(); },
+    state: () => snapshotState(),
+    loadState: s => loadState(s),
+    applyMove: mv => hostPlace(mv.b, mv.c),
+    turnSeat: () => (turn === 1 ? 0 : 1),
+    describeMove: (mv, side) => NAME[side+1] + ' 落在子盘 ' + (mv.b+1) + ' 第 ' + (mv.c+1) + ' 格',
+    onControl: ctl => {
+      if (!ctl) return false;
+      if (ctl.type === 'undo'){ if (!hist.length) return false; undo(); return true; }
+      if (ctl.type === 'new'){ reset(); return true; }
+      return false;
+    },
+    describeControl: (ctl, side) => (ctl.type === 'undo' ? (NAME[side+1] + ' 悔了一步') : (ctl.type === 'new' ? '重新开局' : null)),
+    onLeave: () => { reset(); }
+  };
+
+  function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function renderNet(){
+    const online = NETMODE();
+    const seats = (BOARD_NET && BOARD_NET.net.seats) || [];
+    const myIdx = online ? BOARD_NET.mySide() : -1;
+    const hasGame = online && BOARD_NET.inGame();
+    $('#netRoomInfo').style.display = online ? '' : 'none';
+    $('#chatCard').style.display = online ? '' : 'none';
+    const slots = [];
+    for (let i=0;i<2;i++){
+      const s = seats[i];
+      slots.push('<div class="seatrow"><span class="' + (i===myIdx?'me':'') + '">'
+        + (i===0?'X（先手）':'O（后手）') + ' · '
+        + (s ? esc(s.name) : '<span class="side">空位（等对手）</span>')
+        + (i===myIdx ? ' <span class="youbadge">你</span>' : '')
+        + '</span><span class="side">' + (s ? (hasGame?'对局中':'已就座') : '—') + '</span></div>');
+    }
+    $('#lobbyList').innerHTML = slots.join('');
+    if (online){
+      const isHost = BOARD_NET.isHost();
+      $('#netHostBar').style.display = (isHost && !hasGame) ? '' : 'none';
+      $('#netGuestBar').style.display = (!isHost && !hasGame) ? '' : 'none';
+      $('#startNetBtn').disabled = seats.length < 2;
+      $('#startNetBtn').textContent = seats.length < 2 ? '开始对局（还缺对手）' : '开始对局';
+      $('#roomLink').value = location.origin + location.pathname + '#r=' + BOARD_NET.roomCode();
+      const roleTxt = isHost ? '本机结算' : (BOARD_NET.hostAlive() ? '房主在线' : '等待接管…');
+      const seatTxt = myIdx >= 0 ? (myIdx === 0 ? '（你执 X 先行）' : '（你执 O 后行）') : '';
+      $('#netStatus').innerHTML = (BOARD_NET.net.connected ? '<span class="dot ok"></span>中继已连接' : '<span class="dot bad"></span>连接中继…')
+        + ' · ' + roleTxt + seatTxt + (hasGame ? ' · 对局中' : '');
+      const chats = BOARD_NET.net.chat || [];
+      $('#chatList').innerHTML = chats.map(c => c.sys
+        ? '<div class="chatline sys">' + esc(c.text) + '</div>'
+        : '<div class="chatline"><span class="who">' + esc(c.name) + '</span>：' + esc(c.text) + '</div>').join('');
+      const cl = $('#chatList'); if (cl) cl.scrollTop = cl.scrollHeight;
+    } else {
+      $('#netHostBar').style.display = 'none';
+      $('#netGuestBar').style.display = 'none';
+      $('#netStatus').innerHTML = '';
+      $('#lobbyList').innerHTML = '';
+    }
+  }
+
+  $('#createRoomBtn').onclick = () => BOARD_NET.start("host", BOARD_NET.newRoom(), ($('#netName').value||"玩家").trim());
+  $('#joinRoomBtn').onclick = () => {
+    const code = ($('#netRoom').value||"").trim().toUpperCase();
+    if (code.length !== 4){ BOARD_NET.flash("房号是 4 位字母数字"); return; }
+    BOARD_NET.start("guest", code, ($('#netName').value||"玩家").trim());
+  };
+  $('#netRoom').addEventListener('keydown', e => { if (e.key === "Enter") $('#joinRoomBtn').click(); });
+  $('#copyLinkBtn').onclick = () => BOARD_NET.copyLink();
+  $('#leaveBtn').onclick = () => { BOARD_NET.leave(false); renderNet(); };
+  $('#chatSend').onclick = () => BOARD_NET.sendChat($('#chatInput').value);
+  $('#chatInput').addEventListener('keydown', e => { if (e.key === "Enter") BOARD_NET.sendChat($('#chatInput').value); });
+  $('#startNetBtn').onclick = () => BOARD_NET.startGame();
+
+  BOARD_NET = window.BoardNet.create({ namespace:"cryv/v1/ultimate/", clientPrefix:"cryv_ut", adapter });
+  BOARD_NET.setRender(renderNet);
+
+  // 调试出口（本地验证用，也方便自查规则）
+  window.__dbg = { adapter: adapter, apply: (b,c) => hostPlace(b,c), state: () => snapshotState(), reset: reset, undo: undo };
+
+  reset();
+
+  if (location.hash.indexOf("#r=") === 0){
+    const code = location.hash.slice(3).trim().toUpperCase();
+    if (code.length === 4){
+      $('#netRoom').value = code;
+      BOARD_NET.start("guest", code, ($('#netName').value||"玩家").trim());
+    }
+  }
+})();
+</script>
+</body>
+</html>

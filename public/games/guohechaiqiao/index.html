@@ -208,6 +208,7 @@
     「房主」由房间内的浏览器自动产生，谁掉线就由其他人接管——房间不绑定任何一台特定的机器。</div>
 </div>
 
+<script src="../_record.js"></script>
 <script>
 "use strict";
 /* =====================================================================
@@ -540,7 +541,27 @@ const REASON = { fall: "坠桥", guess: "被猜杀", miss: "猜错自杀", isola
 const locName = id => (id === CENTER ? "C" : "B" + id);
 
 /* ---------------- 渲染 ---------------- */
+/* 本局结束时把对局记录落盘（详见 games/_record.js）。render() 每次都喊它，
+   模块内部保证同一局只记一次。 */
+function recTick() {
+  if (!window.GAME_RECORD) return;
+  GAME_RECORD.tick({
+    over: () => !!(game && game.finished),
+    game: 'guohechaiqiao', name: '过河拆桥',
+    result: () => {
+      if (!game) return '';
+      if (game.winner === null) return '对局结束：平局（全员阵亡或达回合上限）';
+      const w = game.players.get(game.winner);
+      return '对局结束：' + (w ? w.name : '未知玩家') + ' 获胜';
+    },
+    players: () => game
+      ? [...game.players.values()].sort((a, b) => a.seat - b.seat).map(p => p.name)
+      : []
+  });
+}
+
 function render() {
+  recTick();
   if (NET.active && !netPrepare()) return;      // 联机：先按房间快照重建对局
   if (!game) return;
   $("roundNum").textContent = game.round;
