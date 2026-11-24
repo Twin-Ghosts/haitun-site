@@ -347,16 +347,12 @@
     </div>`;
     out.innerHTML = html;
 
+    const wa = new Array(N * N).fill(0);
+    for (const [idx, p] of act) wa[idx] += p;
+
     document.getElementById("btn-sample").addEventListener("click", () => {
-      const a = sample(pa);
-      const sameIdx = sample([same, diff]);
-      let b;
-      if (sameIdx === 0) b = a;
-      else {
-        const others = [];
-        for (let i = 0; i < N; i++) if (i !== a) others.push(i);
-        b = others[Math.floor(Math.random() * others.length)];
-      }
+      const idx = sample(wa);
+      const a = (idx / 6) | 0, b = idx % 6;
       document.getElementById("sample-out").innerHTML =
         `真实数字 <b>${a + 1}</b>，公开报 <b>${b + 1}</b>${a === b ? "（同）" : "（异）"}`;
     });
