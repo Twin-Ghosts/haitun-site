@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>狼人杀 · 自动法官 · 5–12 人联机</title>
+<meta name="description" content="狼人杀：自动法官单机热座与房间码联机，身份只发给本人。">
+<style>
+  :root { color-scheme: dark;
+    --bg:#0d1020; --card:#171b34; --card2:#1d2242; --line:#2a2f52; --fg:#e8ebff;
+    --muted:#9aa0c8; --accent:#7c8cff; --wolf:#ff6b8a; --good:#35d07f; --gold:#ffd27a; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; min-height:100vh; padding:18px 14px 40px; background:radial-gradient(1000px 500px at 50% -10%,#1a2044 0%,var(--bg) 62%);
+    color:var(--fg); font:15.5px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { width:min(720px,100%); margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px;
+    box-shadow:0 12px 34px rgba(0,0,0,.42); }
+  h1 { font-size:20px; margin:0 0 4px; } h2 { margin:0 0 6px; }
+  .sub { color:var(--muted); font-size:12.5px; margin:0 0 10px; }
+  h3 { font-size:13px; color:var(--accent); margin:0 0 8px; font-weight:650; letter-spacing:.04em; }
+  button { font:inherit; cursor:pointer; border-radius:11px; border:1px solid transparent; background:#222849;
+    color:var(--fg); padding:9px 15px; transition:filter .12s, transform .07s; }
+  button:active { transform:translateY(1px); } button:disabled { opacity:.42; cursor:not-allowed; }
+  button.primary { background:linear-gradient(180deg,#5a6cf0,#3b49c8); color:#fff; font-weight:650; }
+  button.ghost { background:transparent; border-color:var(--line); color:var(--muted); }
+  input[type=text], input[type=number] { font:inherit; color:var(--fg); background:#0f1330; border:1px solid var(--line);
+    border-radius:10px; padding:8px 11px; min-width:0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; }
+  .pl { display:flex; align-items:center; gap:8px; background:var(--card2); border:1px solid var(--line);
+    border-radius:11px; padding:8px 10px; font-size:13.5px; }
+  .pl .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pl.dead { opacity:.45; text-decoration:line-through; } .pl.me { border-color:var(--accent); }
+  .tag { font-size:11px; padding:1px 7px; border-radius:999px; border:1px solid var(--line); color:var(--muted); }
+  .role { font-size:26px; font-weight:800; letter-spacing:.06em; margin:6px 0 4px; }
+  .role.wolf { color:var(--wolf); } .role.good { color:var(--good); }
+  .msg { color:var(--muted); font-size:12.5px; line-height:1.8; }
+  .log { font-size:12.5px; color:var(--muted); max-height:190px; overflow:auto; line-height:1.85; }
+  .log b { color:var(--fg); font-weight:600; }
+  .chat { max-height:180px; overflow:auto; display:flex; flex-direction:column; gap:5px; margin-bottom:8px; }
+  .chat div { font-size:13px; } .chat .sys { color:var(--muted); font-size:12px; }
+  .chat .who { color:var(--accent); margin-right:5px; }
+  .cens { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:14px; z-index:900; padding:24px; text-align:center; }
+  .cens p { color:var(--muted); max-width:420px; margin:0; font-size:14px; line-height:1.8; }
+  .warn { background:#2c2413; border:1px solid #4a3d18; color:var(--gold); border-radius:12px;
+    padding:10px 13px; font-size:12.5px; line-height:1.75; margin-top:10px; }
+  .sep { height:1px; background:var(--line); margin:12px 0; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11.5px;
+    background:#101632; border:1px solid var(--line); color:var(--muted); }
+  .pill.on { color:var(--good); border-color:#1f4a35; }
+  .hide { display:none !important; }
+  #flash { position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px); background:#262b4d;
+    border:1px solid var(--line); color:#fff; padding:10px 16px; border-radius:11px; font-size:13.5px;
+    opacity:0; pointer-events:none; transition:.22s; z-index:950; max-width:86vw; }
+  #flash.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+<div id="flash"></div>
+<script src="../_room.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const ROLES = {
+    wolf:  { name: "狼人",  team: "wolf" },
+    seer:  { name: "预言家", team: "good" },
+    witch: { name: "女巫",  team: "good" },
+    vill:  { name: "村民",  team: "good" }
+  };
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const aliveSeats = st => st.players.filter(p => p.alive).map(p => p.seat);
+  const wolvesAlive = st => st.players.filter(p => p.alive && p.role === "wolf");
+  const goodAlive = st => st.players.filter(p => p.alive && p.role !== "wolf");
+  const actorAlive = (st, role) => st.players.find(p => p.alive && p.role === role) || null;
+
+  /* ================= 纯游戏逻辑 ================= */
+  function roleSet(n) {
+    const wolves = Math.max(1, Math.floor(n / 3));
+    const list = [];
+    for (let i = 0; i < wolves; i++) list.push("wolf");
+    list.push("seer");
+    if (n >= 7) list.push("witch");
+    while (list.length < n) list.push("vill");
+    return list.slice(0, n);
+  }
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+  function initGame(players) {
+    const n = players.length, roles = shuffle(roleSet(n));
+    return {
+      phase: "night_wolf", round: 1,
+      players: players.map((p, i) => ({ name: String(p.name || "玩家").slice(0, 10), role: roles[i], alive: true, seat: i })),
+      night: { wolfVotes: {}, wolfTarget: null, seerTarget: null, seerInfo: null,
+               witchDone: false, witchSave: false, witchPoison: null, deaths: [] },
+      votes: {}, lastDeaths: [], winner: null, reason: "",
+      logs: ["第 1 夜，天黑请闭眼。"]
+    };
+  }
+  function checkWin(st) {
+    const w = wolvesAlive(st).length, g = goodAlive(st).length;
+    if (w === 0) { st.winner = "good"; st.reason = "所有狼人出局，好人获胜。"; return true; }
+    if (w >= g) { st.winner = "wolf"; st.reason = "存活狼人不少于好人，狼人获胜。"; return true; }
+    return false;
+  }
+  function resolveNight(st) {
+    const set = new Set();
+    if (st.night.wolfTarget !== null && !st.night.witchSave) set.add(st.night.wolfTarget);
+    if (st.night.witchPoison !== null) set.add(st.night.witchPoison);
+    const deaths = [...set];
+    deaths.forEach(s => { if (st.players[s]) st.players[s].alive = false; });
+    st.lastDeaths = deaths; st.night.deaths = deaths;
+    if (deaths.length) st.logs.push("天亮了。昨夜 <b>" + deaths.map(s => "「" + st.players[s].name + "」").join("、") + "</b> 出局。");
+    else st.logs.push("天亮了。平安夜，无人出局。");
+    if (!checkWin(st)) st.phase = "day";
+  }
+  function nextNight(st) {
+    st.round += 1;
+    st.night = { wolfVotes: {}, wolfTarget: null, seerTarget: null, seerInfo: null,
+                 witchDone: false, witchSave: false, witchPoison: null, deaths: [] };
+    st.votes = {}; st.lastDeaths = [];
+    st.phase = "night_wolf";
+    st.logs.push("第 " + st.round + " 夜，天黑请闭眼。");
+  }
+  function afterWolves(st) {
+    const t = {};
+    Object.values(st.night.wolfVotes).forEach(x => { t[x] = (t[x] || 0) + 1; });
+    const arr = Object.entries(t).map(([k, v]) => [Number(k), v]).sort((a, b) => b[1] - a[1]);
+    st.night.wolfTarget = arr.length ? arr[0][0] : null;
+    if (actorAlive(st, "seer")) st.phase = "night_seer";
+    else if (actorAlive(st, "witch")) st.phase = "night_witch";
+    else resolveNight(st);
+  }
+  function afterSeer(st) {
+    if (actorAlive(st, "witch")) st.phase = "night_witch";
+    else resolveNight(st);
+  }
+
+  function act(st, msg) {
+    const type = msg.type, data = msg.data || {}, seat = msg.seat;
+    if (type === "advance" && st.phase === "day" && !st.winner) {
+      const ns = clone(st);
+      ns.votes = {}; ns.phase = "vote";
+      ns.logs.push("进入投票。");
+      return { ok: true, state: ns };
+    }
+    const me = st.players[seat];
+    if (!me || !me.alive || st.winner) return { ok: false };
+    const ns = clone(st);
+
+    if (type === "wolf_kill" && ns.phase === "night_wolf") {
+      if (me.role !== "wolf") return { ok: false };
+      const t = data.target;
+      if (t === undefined || t === null || !ns.players[t] || !ns.players[t].alive || t === seat) return { ok: false };
+      ns.night.wolfVotes[seat] = t;
+      if (wolvesAlive(ns).every(w => ns.night.wolfVotes[w.seat] !== undefined)) afterWolves(ns);
+      return { ok: true, state: ns };
+    }
+    if (type === "seer_check" && ns.phase === "night_seer") {
+      if (me.role !== "seer") return { ok: false };
+      const t = data.target;
+      if (t === undefined || t === null || !ns.players[t] || !ns.players[t].alive || t === seat) return { ok: false };
+      ns.night.seerTarget = t;
+      ns.night.seerInfo = ns.players[t].role === "wolf" ? "wolf" : "good";
+      afterSeer(ns);
+      return { ok: true, state: ns };
+    }
+    if (type === "witch_act" && ns.phase === "night_witch") {
+      if (me.role !== "witch") return { ok: false };
+      if (data.save && ns.night.wolfTarget !== null) ns.night.witchSave = true;
+      if (data.poison !== null && data.poison !== undefined) {
+        if (!ns.players[data.poison] || !ns.players[data.poison].alive) return { ok: false };
+        ns.night.witchPoison = data.poison;
+      }
+      ns.night.witchDone = true;
+      resolveNight(ns);
+      return { ok: true, state: ns };
+    }
+    if (type === "advance" && ns.phase === "day") {
+      ns.votes = {}; ns.phase = "vote";
+      ns.logs.push("进入投票。");
+      return { ok: true, state: ns };
+    }
+    if (type === "vote" && ns.phase === "vote") {
+      const t = data.target;
+      if (t !== null && (!ns.players[t] || !ns.players[t].alive || t === seat)) return { ok: false };
+      ns.votes[seat] = t;
+      if (aliveSeats(ns).every(s => ns.votes[s] !== undefined)) {
+        const tally = {};
+        Object.values(ns.votes).forEach(x => { if (x !== null) tally[x] = (tally[x] || 0) + 1; });
+        const arr = Object.entries(tally).map(([k, v]) => [Number(k), v]).sort((a, b) => b[1] - a[1]);
+        let out = null;
+        if (arr.length && (arr.length === 1 || arr[0][1] > arr[1][1])) out = arr[0][0];
+        if (out === null) ns.logs.push("投票结果：平票或无有效票，本轮无人出局。");
+        else {
+          ns.players[out].alive = false;
+          ns.logs.push("投票结果：「" + ns.players[out].name + "」以 " + arr[0][1] + " 票出局，身份是 <b>" + ROLES[ns.players[out].role].name + "</b>。");
+        }
+        if (!checkWin(ns)) nextNight(ns);
+      }
+      return { ok: true, state: ns };
+    }
+    return { ok: false };
+  }
+
+  function pubView(st) {
+    if (!st) return { phase: "lobby", round: 0, players: [], logs: [] };
+    return {
+      phase: st.phase, round: st.round, winner: st.winner, reason: st.reason,
+      players: st.players.map(p => ({ name: p.name, alive: p.alive, seat: p.seat,
+        role: st.winner ? p.role : undefined, roleName: st.winner ? ROLES[p.role].name : undefined })),
+      logs: st.logs.slice(-24), dead: st.lastDeaths || []
+    };
+  }
+  function over(st) { return st && st.winner ? { winner: st.winner, reason: st.reason } : null; }
+
+  function privFor(st, seat) {
+    const p = st && st.players && st.players[seat];
+    if (!p) return null;
+    const v = { seat, name: p.name, role: p.role, roleName: ROLES[p.role].name, team: ROLES[p.role].team,
+                alive: p.alive, mates: [], phase: st.phase, canAct: false, prompt: "", targets: [], info: "" };
+    if (p.role === "wolf") v.mates = st.players.filter(q => q.role === "wolf" && q.seat !== seat).map(q => q.name);
+    if (!p.alive || st.winner) return v;
+    if (st.phase === "night_wolf" && p.role === "wolf") {
+      v.canAct = st.night.wolfVotes[seat] === undefined;
+      v.prompt = "选择今晚要击杀的人";
+      v.targets = aliveSeats(st).filter(s => s !== seat);
+      if (!v.canAct) v.info = "你已记票，等其它狼人。";
+    } else if (st.phase === "night_seer" && p.role === "seer") {
+      v.canAct = st.night.seerTarget === null;
+      v.prompt = "选择要查验身份的人";
+      v.targets = aliveSeats(st).filter(s => s !== seat);
+      if (st.night.seerInfo) v.info = "上一验：那人属于「" + (st.night.seerInfo === "wolf" ? "狼人" : "好人") + "」阵营。";
+    } else if (st.phase === "night_witch" && p.role === "witch") {
+      v.canAct = !st.night.witchDone;
+      v.prompt = "今晚的处理";
+      v.targets = aliveSeats(st).filter(s => s !== seat);
+      v.witchVictim = st.night.wolfTarget !== null ? st.players[st.night.wolfTarget].name : "（无人被击杀）";
+    } else if (st.phase === "day") {
+      v.prompt = "白天发言，讨论谁是狼。";
+    } else if (st.phase === "vote") {
+      v.canAct = st.votes[seat] === undefined;
+      v.prompt = "投票放逐一个人";
+      v.targets = aliveSeats(st).filter(s => s !== seat);
+    }
+    return v;
+  }
+
+  const ADAPTER = {
+    initGame,
+    act,
+    pubView,
+    privView: (st, seat) => privFor(st, seat),
+    over
+  };
+
+  /* ================= 联机 ================= */
+  const room = RoomNet.create({
+    ns: "wolf/v1/", minPlayers: 5, maxPlayers: 12, adapter: ADAPTER, maxLen: 10,
+    flash: m => flash(m)
+  });
+
+  /* ================= 界面 ================= */
+  const ui = { mode: "menu", name: "" };
+  const hot = { st: null, stage: "reveal", ri: 0, cens: true, censBody: null };
+  const root = document.getElementById("root");
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function flash(m) { const el = document.getElementById("flash"); if (!el) return; el.textContent = m; el.classList.add("show"); clearTimeout(flash._t); flash._t = setTimeout(() => el.classList.remove("show"), 2400); }
+  const linkFor = code => location.origin + location.pathname + "#r=" + code;
+  const phaseName = p => ({ night_wolf: "狼人行动", night_seer: "预言家查验", night_witch: "女巫行动",
+    day: "白天讨论", vote: "投票", end: "结束" })[p] || p;
+
+  function grid(st, mySeat, showRole) {
+    return `<div class="grid">` + st.players.map(p => `<div class="pl ${p.alive ? "" : "dead"} ${p.seat === mySeat ? "me" : ""}">
+      <span class="nm">${p.seat + 1}. ${esc(p.name)}</span>
+      ${showRole ? `<span class="tag ${ROLES[p.role].team === "wolf" ? "" : ""}">${ROLES[p.role].name}</span>` : ""}</div>`).join("") + `</div>`;
+  }
+  function gridPub(players, mySeat) {
+    return `<div class="grid">` + players.map(p => `<div class="pl ${p.alive ? "" : "dead"} ${p.seat === mySeat ? "me" : ""}">
+      <span class="nm">${p.seat + 1}. ${esc(p.name)}</span>
+      ${p.roleName ? `<span class="tag">${esc(p.roleName)}</span>` : (p.seat === mySeat ? `<span class="tag">我</span>` : "")}</div>`).join("") + `</div>`;
+  }
+
+  /* ---------- 菜单 ---------- */
+  function renderMenu() {
+    root.innerHTML = `
+      <div class="card">
+        <h1>狼人杀</h1>
+        <p class="sub">自动法官，无需主持人 · 5–12 人（5–12 人局自动配狼、预言家、女巫）</p>
+        <div class="warn">单机热座：一部手机轮流传阅，切换人物时有遮挡屏。<br>
+        联机：各自手机，身份只发到本人；房号即凭据，别公开贴。</div>
+      </div>
+      <div class="card">
+        <h3>单机热座</h3>
+        <div class="row" style="margin-top:8px">
+          <input type="number" id="hn" value="8" min="5" max="12" style="width:88px"><span class="msg">人</span>
+          <button class="primary" id="bhot">开始本地局</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>联机房间</h3>
+        <div class="row"><input type="text" id="nm" placeholder="你的昵称" maxlength="10" style="flex:1" value="${esc(ui.name)}"></div>
+        <div class="row" style="margin-top:9px">
+          <button class="primary" id="bcreate">建房</button>
+          <input type="text" id="rc" placeholder="房号" maxlength="4" style="width:96px;text-transform:uppercase">
+          <button id="bjoin">加入</button>
+        </div>
+        <p class="msg" style="margin-top:10px">消息经公共 MQTT 中继转发；房主掉线后房间内其他浏览器会自动接管。</p>
+      </div>`;
+    document.getElementById("bhot").onclick = () => {
+      const n = Math.max(5, Math.min(12, parseInt(document.getElementById("hn").value, 10) || 8));
+      hot.st = initGame(Array.from({ length: n }, (_, i) => ({ name: (i + 1) + "号" })));
+      hot.stage = "reveal"; hot.ri = 0; hot.cens = true;
+      ui.mode = "hot"; render();
+    };
+    document.getElementById("bcreate").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "房主";
+      ui.mode = "online"; room.start("host", room.newRoom(), ui.name); render();
+    };
+    document.getElementById("bjoin").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "玩家";
+      const rc = (document.getElementById("rc").value || "").trim().toUpperCase();
+      if (rc.length < 3) { flash("房号不对"); return; }
+      ui.mode = "online"; room.start("guest", rc, ui.name); render();
+    };
+  }
+
+  /* ---------- 热座：身份揭示 ---------- */
+  function renderReveal() {
+    const st = hot.st, i = hot.ri, p = st.players[i];
+    if (hot.cens) {
+      root.innerHTML = `<div class="cens"><h2>请把设备交给 ${esc(p.name)}</h2>
+        <p>其他人请回避 · 第 ${i + 1} / ${st.players.length} 位</p>
+        <button class="primary" id="ok">我是 ${esc(p.name)}，查看身份</button></div>`;
+      document.getElementById("ok").onclick = () => { hot.cens = false; render(); };
+      return;
+    }
+    const r = ROLES[p.role], mates = p.role === "wolf" ? st.players.filter(q => q.role === "wolf" && q.seat !== i).map(q => q.name) : [];
+    root.innerHTML = `<div class="card">
+      <h2 class="role ${r.team}">${r.name}</h2>
+      <p class="msg">${r.team === "wolf" ? "目标：击杀好人，直到存活狼人不少于好人。" : "目标：找出并放逐全部狼人。"}
+      ${mates.length ? "<br>狼队友：" + esc(mates.join("、")) : ""}
+      ${p.role === "seer" ? "<br>每晚可查验一人阵营。" : ""}
+      ${p.role === "witch" ? "<br>每晚得知谁被击杀，可救、可毒，各一次。" : ""}</p>
+      <div class="row" style="margin-top:14px"><button class="primary" id="nx">记住了，下一位</button></div></div>`;
+    document.getElementById("nx").onclick = () => {
+      if (i + 1 < st.players.length) { hot.ri = i + 1; hot.cens = true; }
+      else { hot.stage = "act"; hot.cens = true; }
+      render();
+    };
+  }
+
+  /* 热座：当前需要行动的人（全部已行动则返回空） */
+  function pending(st) {
+    return st.players.filter(p => p.alive && privFor(st, p.seat).canAct).map(p => p.seat);
+  }
+
+  function hotPublicTurn() {
+    const st = hot.st;
+    if (st.winner) { hot.stage = "end"; return render(); }
+    const pend = pending(st);
+    if (st.phase === "day" || pend.length === 0) {
+      // 白天：公开屏 + 进入投票
+      root.innerHTML = `<div class="card">
+        <div class="row" style="justify-content:space-between"><span class="pill">第 ${st.round} 回合</span><span class="pill">${phaseName(st.phase)}</span></div>
+        <h3 style="margin-top:12px">局面</h3>${grid(st, -1, false)}
+        <div class="sep"></div><div class="log">${st.logs.slice(-10).join("<br>")}</div>
+        <div class="row" style="margin-top:12px">
+          ${st.phase === "day" ? `<button class="primary" id="adv">进入投票</button>` : ""}
+        </div></div>`;
+      const adv = document.getElementById("adv");
+      if (adv) adv.onclick = () => { doAct(hot.st, { type: "advance", data: {}, seat: 0 }); };
+      return;
+    }
+    hotActStep(pend[0]);
+  }
+
+  function hotActStep(seat) {
+    const st = hot.st, p = st.players[seat];
+    if (hot.cens) {
+      root.innerHTML = `<div class="cens"><h2>请把设备交给「${esc(p.name)}」</h2>
+        <p>其它人回避 · 当前是${phaseName(st.phase)}</p>
+        <button class="primary" id="ok">是我</button></div>`;
+      document.getElementById("ok").onclick = () => { hot.cens = false; render(); };
+      return;
+    }
+    const v = privFor(st, seat);
+    let body = "";
+    if (v.phase === "night_wolf") body = `<p class="msg">你是狼人${v.mates.length ? "，队友：" + esc(v.mates.join("、")) : ""}。${v.prompt}。</p>
+      <div class="grid" id="tg">${v.targets.map(s => `<button data-s="${s}">${s + 1}. ${esc(st.players[s].name)}</button>`).join("")}</div>`;
+    else if (v.phase === "night_seer") body = `<p class="msg">你是预言家。${v.prompt}。</p>
+      <div class="grid" id="tg">${v.targets.map(s => `<button data-s="${s}">${s + 1}. ${esc(st.players[s].name)}</button>`).join("")}</div>`;
+    else if (v.phase === "night_witch") body = `<p class="msg">你是女巫。今晚被击杀的是 <b>${esc(v.witchVictim)}</b>。</p>
+      <div class="row" style="margin:8px 0"><button data-w="save">解药救人</button><button data-w="poison">使用毒药</button><button class="ghost" data-w="none">不用</button></div>
+      <div class="hide" id="tg">${v.targets.map(s => `<button data-s="${s}">${s + 1}. ${esc(st.players[s].name)}</button>`).join("")}</div>`;
+    else if (v.phase === "vote") body = `<p class="msg">${v.prompt}（也可弃票）。</p>
+      <div class="grid" id="tg">${v.targets.map(s => `<button data-s="${s}">${s + 1}. ${esc(st.players[s].name)}</button>`).join("")}</div>
+      <div class="row" style="margin-top:9px"><button class="ghost" id="abs">弃票</button></div>`;
+    root.innerHTML = `<div class="card">
+      <div class="row" style="justify-content:space-between"><span class="pill">第 ${st.round} 回合</span><span class="pill">${phaseName(v.phase)}</span></div>
+      <h3 style="margin-top:12px">${esc(p.name)} 的行动</h3>${body}
+      <div class="sep"></div><h3>局面</h3>${grid(st, seat, false)}
+      <div class="sep"></div><div class="log">${st.logs.slice(-8).join("<br>")}</div>
+      <div class="row" style="margin-top:12px"><button class="ghost" id="cv">收起</button></div></div>`;
+    document.getElementById("cv").onclick = () => { hot.cens = true; render(); };
+    const doIt = (type, data) => doAct(st, { type, data, seat });
+    const g = document.getElementById("tg");
+    if (g && v.phase !== "night_witch") {
+      g.querySelectorAll("button").forEach(b => b.onclick = () => doIt(v.phase === "vote" ? "vote" : (v.role === "wolf" ? "wolf_kill" : "seer_check"), { target: Number(b.dataset.s) }));
+    }
+    if (v.phase === "vote") { const ab = document.getElementById("abs"); if (ab) ab.onclick = () => doIt("vote", { target: null }); }
+    if (v.phase === "night_witch") {
+      document.querySelectorAll("[data-w]").forEach(b => b.onclick = () => {
+        const w = b.dataset.w;
+        if (w === "save") doIt("witch_act", { save: true, poison: null });
+        else if (w === "none") doIt("witch_act", { save: false, poison: null });
+        else { document.getElementById("tg").classList.remove("hide");
+          document.getElementById("tg").querySelectorAll("button").forEach(x => x.onclick = () => doIt("witch_act", { save: false, poison: Number(x.dataset.s) })); }
+      });
+    }
+  }
+
+  function doAct(st, msg) {
+    const r = act(st, msg);
+    if (!r.ok) { flash("这一步不合法"); return; }
+    hot.st = r.state;
+    hot.cens = true;
+    if (hot.st.winner) hot.stage = "end";
+    render();
+  }
+
+  /* ---------- 结算 ---------- */
+  function renderEnd(st, hotseat) {
+    const w = st.winner;
+    root.innerHTML = `<div class="card">
+      <h1 class="role ${w === "wolf" ? "wolf" : "good"}">${w === "wolf" ? "狼人阵营获胜" : "好人阵营获胜"}</h1>
+      <p class="msg">${esc(st.reason)}</p><div class="sep"></div>
+      <h3>全员身份</h3>${grid(st, -1, true)}<div class="sep"></div>
+      <div class="log">${st.logs.slice(-18).join("<br>")}</div>
+      <div class="row" style="margin-top:14px">
+        ${hotseat ? `<button class="primary" id="again">再来一局</button><button class="ghost" id="back">回菜单</button>`
+                  : `<button class="ghost" id="back">离开房间</button>`}
+      </div></div>`;
+    if (hotseat) {
+      document.getElementById("again").onclick = () => {
+        hot.st = initGame(hot.st.players.map(p => ({ name: p.name })));
+        hot.stage = "reveal"; hot.ri = 0; hot.cens = true; render();
+      };
+      document.getElementById("back").onclick = () => { ui.mode = "menu"; render(); };
+    } else {
+      document.getElementById("back").onclick = () => { room.leave(); ui.mode = "menu"; render(); };
+    }
+  }
+
+  /* ---------- 联机 ---------- */
+  function renderOnline() {
+    const NET = room.net, HOST = room.host, isHost = NET.role === "host";
+    const seats = isHost ? (HOST.seats || []) : (NET.seats || []);
+    const started = isHost ? HOST.started : !!(NET.pub && NET.pub.phase && NET.pub.phase !== "lobby");
+    const ov = isHost ? (HOST.state ? over(HOST.state) : null) : NET.over;
+
+    if (!started) {
+      const code = NET.room || "-";
+      root.innerHTML = `<div class="card">
+        <h1>房间 ${esc(code)}</h1>
+        <div class="row" style="margin:6px 0 8px">
+          <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "已连中继" : "连接中…"}</span>
+          <span class="pill ${isHost ? "on" : ""}">${isHost ? "房主" : "玩家"}</span>
+        </div>
+        <div class="row"><input type="text" id="lnk" readonly value="${esc(linkFor(code))}" style="flex:1;font-size:12px">
+          <button id="cp">复制</button></div>
+        <div class="sep"></div>
+        <h3>席位 ${seats.length} / 12（至少 5 人）</h3>
+        <div class="grid">${seats.map((s, i) => `<div class="pl"><span class="nm">${i + 1}. ${esc(s.name)}</span></div>`).join("") || `<div class="msg">等待玩家加入…</div>`}</div>
+        <div class="sep"></div>
+        <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+        <div class="row"><input type="text" id="ci" placeholder="发条消息…" maxlength="90" style="flex:1"><button id="cs">发送</button></div>
+        <div class="row" style="margin-top:12px">
+          ${isHost ? `<button class="primary" id="st" ${seats.length < 5 ? "disabled" : ""}>开始游戏</button>` : `<span class="msg">等房主开局…</span>`}
+          <button class="ghost" id="lv">离开</button>
+        </div></div>`;
+      const cpEl = document.getElementById("cp"); if (cpEl) cpEl.onclick = () => room.copyLink(linkFor(code));
+      const stEl = document.getElementById("st"); if (stEl) stEl.onclick = () => room.startGame();
+      document.getElementById("cs").onclick = () => { room.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+      document.getElementById("lv").onclick = () => { room.leave(); ui.mode = "menu"; render(); };
+      return;
+    }
+
+    if (ov) {
+      if (isHost) return renderEnd(HOST.state, false);
+      root.innerHTML = `<div class="card">
+        <h1 class="role ${ov.winner === "wolf" ? "wolf" : "good"}">${ov.winner === "wolf" ? "狼人阵营获胜" : "好人阵营获胜"}</h1>
+        <p class="msg">${esc(ov.reason || "")}</p><div class="sep"></div>
+        <h3>全员身份</h3>${gridPub((NET.pub && NET.pub.players) || [], -1)}
+        <div class="log">${((NET.pub && NET.pub.logs) || []).join("<br>")}</div>
+        <div class="row" style="margin-top:12px"><button class="ghost" id="lv">离开房间</button></div></div>`;
+      document.getElementById("lv").onclick = () => { room.leave(); ui.mode = "menu"; render(); };
+      return;
+    }
+
+    const view = isHost ? pubView(HOST.state) : (NET.pub || {});
+    const me = isHost ? privFor(HOST.state, room.mySeat()) : (NET.priv || null);
+    const seat = me ? me.seat : -1;
+
+    root.innerHTML = `<div class="card">
+      <div class="row" style="justify-content:space-between">
+        <span class="pill">第 ${view.round || 0} 回合</span><span class="pill">${phaseName(view.phase)}</span>
+        <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "在线" : "重连中"}</span>
+      </div>
+      <h3 style="margin-top:12px">我的身份</h3>
+      <div class="row"><span class="role ${me ? me.team : ""}" style="font-size:19px">${esc(me ? me.roleName : "—")}</span>
+        ${me && me.mates.length ? `<span class="msg">队友：${esc(me.mates.join("、"))}</span>` : ""}</div>
+      ${me && me.info ? `<p class="msg">${esc(me.info)}</p>` : ""}
+      ${me && me.prompt ? `<p class="msg">${esc(me.prompt)}</p>` : ""}
+      ${me && me.canAct && me.phase !== "night_witch" ? `<div class="grid" id="tg">${me.targets.map(s => `<button data-s="${s}">${s + 1}. ${esc((view.players[s] || {}).name || s)}</button>`).join("")}</div>` : ""}
+      <div id="extra"></div>
+      <div class="sep"></div><h3>局面</h3>${gridPub(view.players || [], seat)}
+      <div class="sep"></div><div class="log">${(view.logs || []).join("<br>")}</div>
+      <div class="sep"></div>
+      <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+      <div class="row"><input type="text" id="ci" placeholder="发言…" maxlength="90" style="flex:1"><button id="cs">发送</button></div>
+      <div class="row" style="margin-top:10px">
+        ${isHost && view.phase === "day" ? `<button class="primary" id="adv">进入投票</button>` : ""}
+        <button class="ghost" id="lv">离开</button>
+      </div></div>`;
+
+    if (me && me.canAct) {
+      const g = document.getElementById("tg");
+      if (g) g.querySelectorAll("button").forEach(b => b.onclick = () => {
+        const t = Number(b.dataset.s);
+        room.send(me.phase === "vote" ? "vote" : (me.role === "wolf" ? "wolf_kill" : "seer_check"), { target: t });
+      });
+      if (me.phase === "night_witch") {
+        document.getElementById("extra").innerHTML = `<p class="msg">今晚被击杀：<b>${esc(me.witchVictim)}</b></p>
+          <div class="row" style="margin-top:6px"><button data-w="save">解药救人</button><button class="ghost" data-w="none">不用</button></div>
+          <div class="grid hide" id="tg">${me.targets.map(s => `<button data-s="${s}">${s + 1}. ${esc((view.players[s] || {}).name || s)}</button>`).join("")}</div>
+          <div class="row" style="margin-top:6px"><button class="ghost" data-w="poison">使用毒药</button></div>`;
+        document.querySelectorAll("[data-w]").forEach(b => b.onclick = () => {
+          const w = b.dataset.w;
+          if (w === "save") room.send("witch_act", { save: true, poison: null });
+          else if (w === "none") room.send("witch_act", { save: false, poison: null });
+          else {
+            const tg = document.getElementById("tg"); tg.classList.remove("hide");
+            tg.querySelectorAll("button").forEach(x => x.onclick = () => room.send("witch_act", { save: false, poison: Number(x.dataset.s) }));
+          }
+        });
+      }
+      if (me.phase === "vote") {
+        document.getElementById("extra").insertAdjacentHTML("beforeend", `<div class="row" style="margin-top:8px"><button class="ghost" id="abs">弃票</button></div>`);
+        document.getElementById("abs").onclick = () => room.send("vote", { target: null });
+      }
+    }
+    const adv = document.getElementById("adv");
+    if (adv) adv.onclick = () => room.send("advance", {});
+    document.getElementById("cs").onclick = () => { room.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+    document.getElementById("lv").onclick = () => { room.leave(); ui.mode = "menu"; render(); };
+  }
+
+  /* ---------- 路由 ---------- */
+  function render() {
+    if (ui.mode === "online") return renderOnline();
+    if (ui.mode === "hot" && hot.st) {
+      if (hot.st.winner) return renderEnd(hot.st, true);
+      if (hot.stage === "reveal") return renderReveal();
+      return hotPublicTurn();
+    }
+    renderMenu();
+  }
+
+  room.setRender(() => { if (ui.mode === "online") renderOnline(); });
+
+  (function boot() {
+    const m = (location.hash || "").match(/#r=([A-Z0-9]{3,6})/i);
+    if (m) {
+      ui.mode = "online";
+      room.start("guest", m[1].toUpperCase(), "玩家" + Math.floor(Math.random() * 90 + 10));
+      render(); return;
+    }
+    renderMenu();
+  })();
+})();
+</script>
+</body>
+</html>
