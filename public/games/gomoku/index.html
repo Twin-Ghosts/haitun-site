@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>五子棋 · 15×15 单机与联机</title>
+<meta name="description" content="五子棋：15×15 棋盘，单机对 AI、双人同屏，或用房号联机对弈；完整五连判定与悔棋。">
+<style>
+  :root { color-scheme: dark; --bg:#0e1320; --card:#161d2e; --line:#27344a; --fg:#e9eeff;
+          --muted:#96a3bd; --accent:#7c8cff; --black:#1b2233; --white:#f2f5ff; --ok:#3ddc97; --warn:#ffd27a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; min-height:100vh; padding:16px 12px 44px;
+         background: radial-gradient(900px 480px at 50% -10%, #16203a 0%, var(--bg) 62%);
+         color:var(--fg); font:15.5px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { width:min(620px,100%); margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px;
+          margin-bottom:12px; box-shadow:0 12px 30px rgba(0,0,0,.4); }
+  h1 { font-size:21px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:12.5px; margin:0 0 10px; }
+  h3 { font-size:13px; color:var(--accent); margin:0 0 8px; letter-spacing:.04em; }
+  button { font:inherit; cursor:pointer; border-radius:11px; border:1px solid transparent; background:#1f2a3f;
+           color:var(--fg); padding:8px 14px; transition:transform .07s, filter .12s; }
+  button:active { transform:translateY(1px); } button:disabled { opacity:.42; cursor:not-allowed; }
+  button.primary { background:linear-gradient(180deg,#5a6cf0,#3b49c8); color:#fff; font-weight:650; }
+  button.ghost { background:transparent; border-color:var(--line); color:var(--muted); }
+  input[type=text] { font:inherit; color:var(--fg); background:#0f1728; border:1px solid var(--line);
+                     border-radius:10px; padding:8px 11px; min-width:0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .seg { display:flex; gap:6px; margin-bottom:10px; }
+  .seg button { flex:1; }
+  .seg button.on { background:#2b3560; border-color:var(--accent); color:#fff; }
+  .status { display:flex; gap:8px; align-items:center; font-size:13.5px; color:var(--muted); margin-bottom:10px; flex-wrap:wrap; }
+  .dot { width:12px; height:12px; border-radius:50%; display:inline-block; border:1px solid #4a5875; }
+  .dot.b { background:var(--black); } .dot.w { background:var(--white); }
+  #board { position:relative; width:100%; aspect-ratio:1/1; background:#e7d7b8; border-radius:12px;
+           border:1px solid #bda887; box-shadow:inset 0 0 40px rgba(120,95,60,.35); overflow:hidden; touch-action:manipulation; }
+  #board .lines { position:absolute; inset:0; }
+  #board .cell { position:absolute; display:flex; align-items:center; justify-content:center; }
+  .stone { width:78%; height:78%; border-radius:50%; box-shadow:0 2px 4px rgba(0,0,0,.35); }
+  .stone.b { background:radial-gradient(circle at 34% 30%, #3a4459, #10151f); }
+  .stone.w { background:radial-gradient(circle at 34% 30%, #ffffff, #cfd6e4); }
+  .stone.last { outline:2px solid #e0483a; outline-offset:-2px; }
+  .mark { position:absolute; width:70%; height:70%; border-radius:50%; box-shadow:0 0 0 2px #7c8cff inset; opacity:.55; }
+  .log { font-size:12.5px; color:var(--muted); max-height:150px; overflow:auto; line-height:1.85; }
+  .chat { max-height:150px; overflow:auto; display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
+  .chat div { font-size:12.8px; } .chat .sys { color:var(--muted); font-size:12px; }
+  .chat .who { color:var(--accent); margin-right:5px; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11.5px;
+          background:#101a2b; border:1px solid var(--line); color:var(--muted); }
+  .pill.on { color:var(--ok); border-color:#1f4a35; }
+  .sep { height:1px; background:var(--line); margin:11px 0; }
+  .msg { color:var(--muted); font-size:12.5px; line-height:1.8; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; }
+  .pl { display:flex; align-items:center; gap:8px; background:#1b2438; border:1px solid var(--line);
+        border-radius:11px; padding:8px 10px; font-size:13.5px; }
+  .pl .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pl.me { border-color:var(--accent); }
+  #flash { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(18px);
+           background:#22304a; border:1px solid var(--line); color:#fff; padding:9px 15px; border-radius:11px;
+           font-size:13.5px; opacity:0; pointer-events:none; transition:.22s; z-index:900; max-width:86vw; }
+  #flash.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+<div id="flash"></div>
+<script src="../_net.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const N = 15;
+  const idx = (x, y) => y * N + x;
+  const XY = i => [i % N, Math.floor(i / N)];
+
+  /* ================= 棋局（纯逻辑，可序列化） ================= */
+  const G = { b: new Array(N * N).fill(0), turn: 1, over: false, win: 0, last: -1, ply: 0, hist: [] };
+
+  function reset() {
+    G.b = new Array(N * N).fill(0); G.turn = 1; G.over = false; G.win = 0; G.last = -1; G.ply = 0; G.hist = [];
+  }
+  const snap = () => ({ b: G.b.slice(), turn: G.turn, over: G.over, win: G.win, last: G.last, ply: G.ply, hist: G.hist.slice() });
+  function load(s) {
+    G.b = (s.b || []).slice(); G.turn = s.turn; G.over = !!s.over; G.win = s.win || 0;
+    G.last = s.last; G.ply = s.ply || 0; G.hist = (s.hist || []).slice();
+  }
+
+  const DIRS = [[1, 0], [0, 1], [1, 1], [1, -1]];
+  function stonesLine(x, y, dx, dy, p) {
+    let n = 1;
+    for (const s of [1, -1]) {
+      for (let k = 1; k < 6; k++) {
+        const nx = x + dx * k * s, ny = y + dy * k * s;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N) break;
+        if (G.b[idx(nx, ny)] !== p) break;
+        n++;
+      }
+    }
+    return n;
+  }
+  function wins(x, y, p) {
+    for (const [dx, dy] of DIRS) if (stonesLine(x, y, dx, dy, p) >= 5) return true;
+    return false;
+  }
+  function place(mv) {
+    if (G.over) return false;
+    const x = mv.x, y = mv.y;
+    if (!(x >= 0 && y >= 0 && x < N && y < N)) return false;
+    if (G.b[idx(x, y)] !== 0) return false;
+    const p = G.turn;
+    G.b[idx(x, y)] = p; G.last = idx(x, y); G.ply++;
+    G.hist.push([x, y, p]);
+    if (wins(x, y, p)) { G.over = true; G.win = p; }
+    else if (G.ply >= N * N) { G.over = true; G.win = -1; }
+    else G.turn = 3 - p;
+    return true;
+  }
+  function undoLocal(n) {
+    for (let i = 0; i < n; i++) {
+      const h = G.hist.pop(); if (!h) break;
+      G.b[idx(h[0], h[1])] = 0; G.ply--;
+    }
+    G.over = false; G.win = 0;
+    G.last = G.hist.length ? idx(G.hist[G.hist.length - 1][0], G.hist[G.hist.length - 1][1]) : -1;
+    G.turn = G.hist.length ? 3 - G.hist[G.hist.length - 1][2] : 1;
+  }
+
+  /* ---- 局面打分：某个空点对 p 的价值 ---- */
+  function shapeScore(count, openA, openB) {
+    if (count >= 5) return 1e7;
+    if (count === 4) return (openA && openB) ? 1e6 : (openA || openB ? 12000 : 0);
+    if (count === 3) return (openA && openB) ? 9000 : (openA || openB ? 900 : 0);
+    if (count === 2) return (openA && openB) ? 400 : (openA || openB ? 90 : 0);
+    return (openA && openB) ? 30 : 0;
+  }
+  function pointScore(x, y, p) {
+    let total = 0;
+    for (const [dx, dy] of DIRS) {
+      let cnt = 1, openA = false, openB = false;
+      for (const s of [1, -1]) {
+        const side = s === 1 ? "A" : "B";
+        let k = 1, blocked = false, gap = false;
+        for (; k <= 4; k++) {
+          const nx = x + dx * k * s, ny = y + dy * k * s;
+          if (nx < 0 || ny < 0 || nx >= N || ny >= N) { blocked = true; break; }
+          const v = G.b[idx(nx, ny)];
+          if (v === p) { if (gap) { blocked = true; break; } cnt++; continue; }
+          if (v === 0) { if (!gap) { gap = true; continue; } else { break; } }
+          blocked = true; break;
+        }
+        const isOpen = !blocked;
+        if (side === "A") openA = isOpen; else openB = isOpen;
+      }
+      total += shapeScore(cnt, openA, openB);
+    }
+    return total;
+  }
+  function nearCandidates() {
+    const list = [];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (G.b[idx(x, y)] !== 0) continue;
+      let near = false;
+      for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+        if (G.b[idx(nx, ny)] !== 0) { near = true; break; }
+      }
+      if (near) list.push([x, y]);
+    }
+    return list;
+  }
+  function aiPick() {
+    if (G.ply === 0) return { x: 7, y: 7 };
+    const cands = nearCandidates();
+    if (!cands.length) return null;
+    const me = G.turn, foe = 3 - G.turn;
+    let best = null, bestV = -1;
+    for (const [x, y] of cands) {
+      const a = pointScore(x, y, me), d = pointScore(x, y, foe);
+      const v = a * 1.35 + d + Math.random() * 3;
+      if (v > bestV) { bestV = v; best = { x, y }; }
+    }
+    return best;
+  }
+
+  /* ================= 联机 adapter ================= */
+  const ADAPTER = {
+    seatCount: () => 2,
+    initGame: () => { reset(); },
+    state: () => snap(),
+    loadState: s => { load(s); },
+    applyMove: mv => place(mv),
+    turnSeat: () => G.turn - 1,
+    describeMove: (mv, seat) => ((seat === 0 ? "●" : "○") + " " + "ABCDEFGHIJKLMNO"[mv.x] + (N - mv.y)),
+    onControl: (ctl) => { if (ctl && ctl.t === "reset") { reset(); return true; } return false; },
+    describeControl: () => "重新开局"
+  };
+  const net = BoardNet.create({ namespace: "gomoku/v1/", adapter: ADAPTER, maxLen: 10, clientPrefix: "gomoku" });
+
+  /* ================= 界面 ================= */
+  const ui = { mode: "menu", vsAI: true, name: "" };
+  const root = document.getElementById("root");
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function flash(m) { const el = document.getElementById("flash"); if (!el) return; el.textContent = m; el.classList.add("show"); clearTimeout(flash._t); flash._t = setTimeout(() => el.classList.remove("show"), 2200); }
+  const linkFor = code => location.origin + location.pathname + "#r=" + code;
+
+  function boardHTML(interactive, myTurn) {
+    const pad = 100 / N;
+    let cells = "";
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const i = idx(x, y), v = G.b[i];
+      cells += `<div class="cell" data-i="${i}" style="left:${pad * (x + 0.5)}%;top:${pad * (y + 0.5)}%;width:${pad}%;height:${pad}%;transform:translate(-50%,-50%)">
+        ${v ? `<div class="stone ${v === 1 ? "b" : "w"} ${i === G.last ? "last" : ""}"></div>` : (interactive && myTurn ? `<div class="mark"></div>` : "")}</div>`;
+    }
+    return `<div id="board">${cells}</div>`;
+  }
+
+  function statusText() {
+    if (G.over) {
+      if (G.win === 1) return `<span class="dot b"></span>黑棋胜`;
+      if (G.win === 2) return `<span class="dot w"></span>白棋胜`;
+      return "平局";
+    }
+    return (G.turn === 1 ? `<span class="dot b"></span>轮到黑棋` : `<span class="dot w"></span>轮到白棋`) + ` · 第 ${G.ply + 1} 手`;
+  }
+
+  /* ---------- 菜单 ---------- */
+  function renderMenu() {
+    root.innerHTML = `
+      <div class="card">
+        <h1>五子棋</h1>
+        <p class="sub">15×15 · 五子连线即胜 · 先手黑棋</p>
+        <div class="row">
+          <button class="primary" id="ai">单机对 AI</button>
+          <button id="hot">双人同屏</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>联机对弈</h3>
+        <div class="row"><input type="text" id="nm" placeholder="你的昵称" maxlength="10" style="flex:1" value="${esc(ui.name)}"></div>
+        <div class="row" style="margin-top:9px">
+          <button class="primary" id="cr">创建房间</button>
+          <input type="text" id="rc" placeholder="房号" maxlength="4" style="width:96px;text-transform:uppercase">
+          <button id="jn">加入</button>
+        </div>
+        <p class="msg" style="margin-top:9px">房主执黑先行；房主掉线后房间内另一个浏览器会自动接手。</p>
+      </div>`;
+    document.getElementById("ai").onclick = () => { reset(); ui.vsAI = true; ui.mode = "local"; render(); };
+    document.getElementById("hot").onclick = () => { reset(); ui.vsAI = false; ui.mode = "local"; render(); };
+    document.getElementById("cr").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "房主";
+      ui.mode = "online"; net.start("host", net.newRoom(), ui.name); render();
+    };
+    document.getElementById("jn").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "玩家";
+      const rc = (document.getElementById("rc").value || "").trim().toUpperCase();
+      if (rc.length < 3) { flash("房号不对"); return; }
+      ui.mode = "online"; net.start("guest", rc, ui.name); render();
+    };
+  }
+
+  /* ---------- 本地（AI 或同屏） ---------- */
+  function renderLocal() {
+    const myTurn = !G.over && (!ui.vsAI || G.turn === 1);
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">${ui.vsAI ? "单机对 AI" : "双人同屏"}</span>
+          <button class="ghost" id="back">回菜单</button>
+        </div>
+        <div class="status" style="margin-top:10px">${statusText()}</div>
+        ${boardHTML(true, myTurn)}
+        <div class="row" style="margin-top:11px">
+          <button class="primary" id="rs">重新开始</button>
+          <button class="ghost" id="ud">悔棋</button>
+        </div>
+        <div class="sep"></div><div class="log">${G.ply ? "已走 " + G.ply + " 手" : "点棋盘落子。"}</div>
+      </div>`;
+    document.getElementById("back").onclick = () => { ui.mode = "menu"; render(); };
+    document.getElementById("rs").onclick = () => { reset(); render(); };
+    document.getElementById("ud").onclick = () => {
+      if (!G.ply) { flash("还没有落子"); return; }
+      undoLocal(ui.vsAI ? Math.min(2, G.ply) : 1); render();
+    };
+    document.getElementById("board").addEventListener("click", ev => {
+      const c = ev.target.closest(".cell"); if (!c) return;
+      if (G.over) { flash("本局已结束，点重新开始"); return; }
+      if (ui.vsAI && G.turn !== 1) return;
+      const i = Number(c.dataset.i); const x = i % N, y = Math.floor(i / N);
+      if (!place({ x, y })) return;
+      render();
+      if (ui.vsAI && !G.over) {
+        setTimeout(() => {
+          const mv = aiPick();
+          if (mv) place(mv);
+          render();
+        }, 260);
+      }
+    });
+  }
+
+  /* ---------- 联机 ---------- */
+  function renderOnline() {
+    const NET = net.net, HOST = net.host, isHost = net.isHost();
+    const seats = isHost ? HOST.seats : NET.seats;
+    const inGame = isHost ? HOST.state !== null : NET.state !== null;
+    const mySide = isHost ? 0 : NET.seatIdx;
+
+    if (!inGame) {
+      const code = NET.room || "-";
+      root.innerHTML = `
+        <div class="card">
+          <h1>房间 ${esc(code)}</h1>
+          <div class="row" style="margin:6px 0 9px">
+            <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "已连中继" : "连接中…"}</span>
+            <span class="pill ${isHost ? "on" : ""}">${isHost ? "房主（执黑）" : "挑战者"}</span>
+          </div>
+          <div class="row"><input type="text" id="lnk" readonly value="${esc(linkFor(code))}" style="flex:1;font-size:12px"><button id="cp">复制</button></div>
+          <div class="sep"></div>
+          <h3>座位</h3>
+          <div class="grid">${[
+            `<div class="pl ${isHost ? "me" : ""}"><span class="nm">${esc((seats[0] && seats[0].name) || "空位")}</span><span class="pill">黑</span></div>`,
+            `<div class="pl ${!isHost && NET.seatIdx === 1 ? "me" : ""}"><span class="nm">${esc((seats[1] && seats[1].name) || "空位")}</span><span class="pill">白</span></div>`
+          ].join("")}</div>
+          <div class="sep"></div>
+          <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+          <div class="row"><input type="text" id="ci" placeholder="发条消息…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+          <div class="row" style="margin-top:11px">
+            ${isHost ? `<button class="primary" id="sg">开始对局</button>` : `<span class="msg">等房主开局…</span>`}
+            <button class="ghost" id="lv">离开</button>
+          </div>
+        </div>`;
+      const cp = document.getElementById("cp"); if (cp) cp.onclick = () => net.copyLink(linkFor(code));
+      const sg = document.getElementById("sg"); if (sg) sg.onclick = () => net.startGame();
+      document.getElementById("cs").onclick = () => { net.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+      document.getElementById("lv").onclick = () => { net.leave(); ui.mode = "menu"; render(); };
+      return;
+    }
+
+    const myTurn = !G.over && G.turn === (mySide + 1) && mySide >= 0;
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">${mySide === 0 ? "你执黑" : (mySide === 1 ? "你执白" : "观战")}</span>
+          <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "在线" : "重连中"}</span>
+        </div>
+        <div class="status" style="margin-top:9px">${statusText()}</div>
+        ${boardHTML(myTurn, myTurn)}
+        <div class="row" style="margin-top:11px">
+          <button class="ghost" id="rs">重新开局</button>
+          <button class="ghost" id="lv">离开</button>
+        </div>
+        ${G.over ? `<p class="msg" style="margin-top:9px">对局结束，两边都可以点「重新开局」再来一盘。</p>` : ""}
+        <div class="sep"></div>
+        <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+        <div class="row"><input type="text" id="ci" placeholder="边下边聊…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+      </div>`;
+    document.getElementById("board").addEventListener("click", ev => {
+      const c = ev.target.closest(".cell"); if (!c) return;
+      if (G.over) { flash("本局已结束"); return; }
+      if (mySide < 0) { flash("你在观战"); return; }
+      if (G.turn !== mySide + 1) { flash("现在不是你的回合"); return; }
+      const i = Number(c.dataset.i);
+      net.sendMove({ x: i % N, y: Math.floor(i / N) });
+    });
+    document.getElementById("rs").onclick = () => net.sendControl({ t: "reset" });
+    document.getElementById("lv").onclick = () => { net.leave(); ui.mode = "menu"; render(); };
+    document.getElementById("cs").onclick = () => { net.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+  }
+
+  function render() {
+    if (ui.mode === "online") return renderOnline();
+    if (ui.mode === "local") return renderLocal();
+    renderMenu();
+  }
+  net.setRender(() => { if (ui.mode === "online") renderOnline(); });
+
+  (function boot() {
+    const m = (location.hash || "").match(/#r=([A-Z0-9]{3,6})/i);
+    if (m) { ui.mode = "online"; net.start("guest", m[1].toUpperCase(), "玩家" + Math.floor(Math.random() * 90 + 10)); render(); return; }
+    renderMenu();
+  })();
+})();
+</script>
+</body>
+</html>
