@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>四子棋 · 7×6 连四</title>
+<meta name="description" content="四子棋（Connect Four）：7 列 6 行，棋子往下掉，先连成四个者胜；单机对 AI、双人同屏或房号联机。">
+<style>
+  :root { color-scheme: dark; --bg:#0e1320; --card:#161d2e; --line:#27344a; --fg:#e9eeff;
+          --muted:#96a3bd; --accent:#7c8cff; --ok:#3ddc97; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; min-height:100vh; padding:16px 12px 44px;
+         background: radial-gradient(900px 480px at 50% -10%, #16203a 0%, var(--bg) 62%);
+         color:var(--fg); font:15.5px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { width:min(620px,100%); margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px;
+          box-shadow:0 12px 30px rgba(0,0,0,.4); }
+  h1 { font-size:21px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:12.5px; margin:0 0 10px; }
+  h3 { font-size:13px; color:var(--accent); margin:0 0 8px; letter-spacing:.04em; }
+  button { font:inherit; cursor:pointer; border-radius:11px; border:1px solid transparent; background:#1f2a3f;
+           color:var(--fg); padding:8px 14px; transition:transform .07s; }
+  button:active { transform:translateY(1px); } button:disabled { opacity:.42; cursor:not-allowed; }
+  button.primary { background:linear-gradient(180deg,#5a6cf0,#3b49c8); color:#fff; font-weight:650; }
+  button.ghost { background:transparent; border-color:var(--line); color:var(--muted); }
+  input[type=text] { font:inherit; color:var(--fg); background:#0f1728; border:1px solid var(--line);
+                     border-radius:10px; padding:8px 11px; min-width:0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .status { display:flex; gap:10px; align-items:center; font-size:13.5px; color:var(--muted);
+            margin-bottom:10px; flex-wrap:wrap; }
+  .dot { width:13px; height:13px; border-radius:50%; display:inline-block; border:1px solid #48557a; }
+  .dot.r { background:radial-gradient(circle at 34% 30%, #ff8b7a, #d43f2a); }
+  .dot.y { background:radial-gradient(circle at 34% 30%, #ffe08a, #e0a92a); }
+  #board { display:grid; grid-template-columns:repeat(7,1fr); gap:5px; background:#1b2438;
+           padding:8px; border-radius:14px; border:1px solid var(--line); position:relative; }
+  .col { display:grid; grid-template-rows:repeat(6,1fr); gap:5px; border-radius:10px; cursor:pointer;
+         transition:background .12s; }
+  .col:hover { background:rgba(124,140,255,.09); }
+  .slot { aspect-ratio:1/1; border-radius:50%; background:#0e1320; border:1px solid #232e44;
+          display:flex; align-items:center; justify-content:center; }
+  .slot .disc { width:86%; height:86%; border-radius:50%; box-shadow:0 2px 5px rgba(0,0,0,.35);
+                animation:pop .18s ease-out; }
+  .slot .disc.r { background:radial-gradient(circle at 34% 30%, #ff8b7a, #c93a26); }
+  .slot .disc.y { background:radial-gradient(circle at 34% 30%, #ffe08a, #dcab29); }
+  .slot .disc.last { outline:2px solid #fff; outline-offset:-2px; }
+  @keyframes pop { from { transform:scale(.55); opacity:.5 } to { transform:scale(1); opacity:1 } }
+  .chat { max-height:140px; overflow:auto; display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
+  .chat div { font-size:12.8px; } .chat .sys { color:var(--muted); font-size:12px; }
+  .chat .who { color:var(--accent); margin-right:5px; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11.5px;
+          background:#101a2b; border:1px solid var(--line); color:var(--muted); }
+  .pill.on { color:var(--ok); border-color:#1f4a35; }
+  .sep { height:1px; background:var(--line); margin:11px 0; }
+  .msg { color:var(--muted); font-size:12.5px; line-height:1.8; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; }
+  .pl { display:flex; align-items:center; gap:8px; background:#1b2438; border:1px solid var(--line);
+        border-radius:11px; padding:8px 10px; font-size:13.5px; }
+  .pl .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pl.me { border-color:var(--accent); }
+  #flash { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(18px);
+           background:#22304a; border:1px solid var(--line); color:#fff; padding:9px 15px; border-radius:11px;
+           font-size:13.5px; opacity:0; pointer-events:none; transition:.22s; z-index:900; max-width:86vw; }
+  #flash.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+<div id="flash"></div>
+<script src="../_net.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const C = 7, R = 6;
+  const idx = (r, c) => r * C + c;
+
+  /* ================= 棋局 ================= */
+  const G = { b: new Array(C * R).fill(0), turn: 1, over: false, win: 0, last: -1, ply: 0 };
+
+  function reset() { G.b = new Array(C * R).fill(0); G.turn = 1; G.over = false; G.win = 0; G.last = -1; G.ply = 0; }
+  const snap = () => ({ b: G.b.slice(), turn: G.turn, over: G.over, win: G.win, last: G.last, ply: G.ply });
+  function load(s) {
+    G.b = (s.b || []).slice(); G.turn = s.turn; G.over = !!s.over; G.win = s.win || 0;
+    G.last = s.last === undefined ? -1 : s.last; G.ply = s.ply || 0;
+  }
+  function dropRow(b, c) {
+    for (let r = 0; r < R; r++) if (b[idx(r, c)] === 0) return r;
+    return -1;
+  }
+  const DIRS4 = [[0, 1], [1, 0], [1, 1], [1, -1]];
+  function winsAt(b, r, c, p) {
+    for (const [dr, dc] of DIRS4) {
+      let n = 1;
+      for (const s of [1, -1]) {
+        for (let k = 1; k < 4; k++) {
+          const nr = r + dr * k * s, nc = c + dc * k * s;
+          if (nr < 0 || nc < 0 || nr >= R || nc >= C) break;
+          if (b[idx(nr, nc)] !== p) break;
+          n++;
+        }
+      }
+      if (n >= 4) return true;
+    }
+    return false;
+  }
+  function place(mv) {
+    if (G.over) return false;
+    const c = mv.c;
+    if (!(c >= 0 && c < C)) return false;
+    const r = dropRow(G.b, c);
+    if (r < 0) return false;
+    const p = G.turn;
+    G.b[idx(r, c)] = p; G.last = idx(r, c); G.ply++;
+    if (winsAt(G.b, r, c, p)) { G.over = true; G.win = p; }
+    else if (G.ply >= C * R) { G.over = true; G.win = -1; }
+    else G.turn = 3 - p;
+    return true;
+  }
+
+  /* ---- AI：alpha-beta，深度 6 ---- */
+  function legalCols(b) { const out = []; for (let c = 0; c < C; c++) if (b[idx(R - 1, c)] === 0) out.push(c); return out; }
+  const ORDER = [3, 2, 4, 1, 5, 0, 6];
+  function scoreBoard(b, me) {
+    let s = 0;
+    const foe = 3 - me;
+    const windows = [];
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+      for (const [dr, dc] of DIRS4) {
+        const er = r + dr * 3, ec = c + dc * 3;
+        if (er < 0 || ec < 0 || er >= R || ec >= C) continue;
+        windows.push([idx(r, c), idx(r + dr, c + dc), idx(r + dr * 2, c + dc * 2), idx(er, ec)]);
+      }
+    }
+    for (const w of windows) {
+      let m = 0, o = 0, e = 0;
+      for (const i of w) { const v = b[i]; if (v === me) m++; else if (v === foe) o++; else e++; }
+      if (m && o) continue;
+      if (m === 3 && e === 1) s += 90;
+      else if (m === 2 && e === 2) s += 18;
+      else if (m === 1 && e === 3) s += 3;
+      if (o === 3 && e === 1) s -= 110;
+      else if (o === 2 && e === 2) s -= 22;
+      else if (o === 1 && e === 3) s -= 4;
+    }
+    for (let r = 0; r < R; r++) if (b[idx(r, 3)] === me) s += 6;
+    return s;
+  }
+  const WIN = 1e6;
+  function bestMove(depth) {
+    const b = G.b.slice();
+    const me = G.turn, foe = 3 - me;
+    if (G.ply === 0) return { c: 3 };
+    let best = null, bestV = -Infinity;
+    for (const c of ORDER) {
+      const r = dropRow(b, c);
+      if (r < 0) continue;
+      b[idx(r, c)] = me;
+      let v;
+      if (winsAt(b, r, c, me)) v = WIN + depth;          // 立刻能连四，优先且越快越好
+      else v = -negamax(b, depth - 1, -Infinity, Infinity, foe);
+      b[idx(r, c)] = 0;
+      if (v > bestV) { bestV = v; best = { c }; }
+    }
+    return best;
+  }
+  // 标准 negamax：所有分数都以「当前该走的一方」为视角，父节点取负
+  function negamax(b, depth, alpha, beta, p) {
+    const cols = legalCols(b);
+    if (!cols.length) return 0;                    // 满盘是和棋
+    if (depth <= 0) return scoreBoard(b, p);
+    let best = -Infinity;
+    for (const c of ORDER) {
+      if (cols.indexOf(c) < 0) continue;
+      const r = dropRow(b, c);
+      b[idx(r, c)] = p;
+      let v;
+      if (winsAt(b, r, c, p)) v = WIN + depth;
+      else v = -negamax(b, depth - 1, -beta, -alpha, 3 - p);
+      b[idx(r, c)] = 0;
+      if (v > best) best = v;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+
+  /* ================= 联机 adapter ================= */
+  const ADAPTER = {
+    seatCount: () => 2,
+    initGame: () => { reset(); },
+    state: () => snap(),
+    loadState: s => { load(s); },
+    applyMove: mv => place(mv),
+    turnSeat: () => G.turn - 1,
+    describeMove: (mv, seat) => (seat === 0 ? "红" : "黄") + " 第 " + (mv.c + 1) + " 列",
+    onControl: ctl => { if (ctl && ctl.t === "reset") { reset(); return true; } return false; },
+    describeControl: () => "重新开局"
+  };
+  const net = BoardNet.create({ namespace: "connect4/v1/", adapter: ADAPTER, maxLen: 10, clientPrefix: "c4" });
+
+  /* ================= 界面 ================= */
+  const ui = { mode: "menu", vsAI: true, name: "" };
+  const root = document.getElementById("root");
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function flash(m) { const el = document.getElementById("flash"); if (!el) return; el.textContent = m; el.classList.add("show"); clearTimeout(flash._t); flash._t = setTimeout(() => el.classList.remove("show"), 2200); }
+  const linkFor = code => location.origin + location.pathname + "#r=" + code;
+
+  function boardHTML() {
+    let cols = "";
+    for (let c = 0; c < C; c++) {
+      let slots = "";
+      for (let r = R - 1; r >= 0; r--) {
+        const i = idx(r, c), v = G.b[i];
+        slots += `<div class="slot">${v ? `<div class="disc ${v === 1 ? "r" : "y"} ${i === G.last ? "last" : ""}"></div>` : ""}</div>`;
+      }
+      cols += `<div class="col" data-c="${c}">${slots}</div>`;
+    }
+    return `<div id="board">${cols}</div>`;
+  }
+  function statusHTML() {
+    if (G.over) {
+      if (G.win === 1) return `<span class="dot r"></span>红方胜`;
+      if (G.win === 2) return `<span class="dot y"></span>黄方胜`;
+      return "棋盘下满，和棋";
+    }
+    return (G.turn === 1 ? `<span class="dot r"></span>轮到红方` : `<span class="dot y"></span>轮到黄方`) + ` · 第 ${G.ply + 1} 手`;
+  }
+
+  function renderMenu() {
+    root.innerHTML = `
+      <div class="card">
+        <h1>四子棋</h1>
+        <p class="sub">7 列 × 6 行 · 棋子落到底 · 先连成四个（横竖斜都算）即胜</p>
+        <div class="row">
+          <button class="primary" id="ai">单机对 AI</button>
+          <button id="hot">双人同屏</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>联机对弈</h3>
+        <div class="row"><input type="text" id="nm" placeholder="你的昵称" maxlength="10" style="flex:1" value="${esc(ui.name)}"></div>
+        <div class="row" style="margin-top:9px">
+          <button class="primary" id="cr">创建房间</button>
+          <input type="text" id="rc" placeholder="房号" maxlength="4" style="width:96px;text-transform:uppercase">
+          <button id="jn">加入</button>
+        </div>
+        <p class="msg" style="margin-top:9px">房主执红先行；房主掉线后房间内另一个浏览器会自动接手。</p>
+      </div>`;
+    document.getElementById("ai").onclick = () => { reset(); ui.vsAI = true; ui.mode = "local"; render(); };
+    document.getElementById("hot").onclick = () => { reset(); ui.vsAI = false; ui.mode = "local"; render(); };
+    document.getElementById("cr").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "房主";
+      ui.mode = "online"; net.start("host", net.newRoom(), ui.name); render();
+    };
+    document.getElementById("jn").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "玩家";
+      const rc = (document.getElementById("rc").value || "").trim().toUpperCase();
+      if (rc.length < 3) { flash("房号不对"); return; }
+      ui.mode = "online"; net.start("guest", rc, ui.name); render();
+    };
+  }
+
+  function renderLocal() {
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">${ui.vsAI ? "单机对 AI" : "双人同屏"}</span>
+          <button class="ghost" id="back">回菜单</button>
+        </div>
+        <div class="status" style="margin-top:10px">${statusHTML()}</div>
+        ${boardHTML()}
+        <div class="row" style="margin-top:11px"><button class="primary" id="rs">重新开始</button></div>
+        <div class="sep"></div><div class="msg">点某一列，棋子会落到该列最低的空位。</div>
+      </div>`;
+    document.getElementById("back").onclick = () => { ui.mode = "menu"; render(); };
+    document.getElementById("rs").onclick = () => { reset(); render(); };
+    const bd = document.getElementById("board");
+    bd.addEventListener("click", ev => {
+      const col = ev.target.closest(".col"); if (!col) return;
+      if (G.over) { flash("本局已结束"); return; }
+      if (ui.vsAI && G.turn !== 1) return;
+      if (!place({ c: Number(col.dataset.c) })) { flash("这一列满了"); return; }
+      render();
+      if (ui.vsAI && !G.over) setTimeout(() => { const mv = bestMove(5); if (mv) place(mv); render(); }, 240);
+    });
+  }
+
+  function renderOnline() {
+    const NET = net.net, HOST = net.host, isHost = net.isHost();
+    const seats = isHost ? HOST.seats : NET.seats;
+    const inGame = isHost ? HOST.state !== null : NET.state !== null;
+    const mySide = isHost ? 0 : NET.seatIdx;
+
+    if (!inGame) {
+      const code = NET.room || "-";
+      root.innerHTML = `
+        <div class="card">
+          <h1>房间 ${esc(code)}</h1>
+          <div class="row" style="margin:6px 0 9px">
+            <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "已连中继" : "连接中…"}</span>
+            <span class="pill ${isHost ? "on" : ""}">${isHost ? "房主（红）" : "挑战者"}</span>
+          </div>
+          <div class="row"><input type="text" id="lnk" readonly value="${esc(linkFor(code))}" style="flex:1;font-size:12px"><button id="cp">复制</button></div>
+          <div class="sep"></div><h3>座位</h3>
+          <div class="grid2">
+            <div class="pl ${isHost ? "me" : ""}"><span class="nm">${esc((seats[0] && seats[0].name) || "空位")}</span><span class="pill">红</span></div>
+            <div class="pl ${!isHost && NET.seatIdx === 1 ? "me" : ""}"><span class="nm">${esc((seats[1] && seats[1].name) || "空位")}</span><span class="pill">黄</span></div>
+          </div>
+          <div class="sep"></div>
+          <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+          <div class="row"><input type="text" id="ci" placeholder="发条消息…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+          <div class="row" style="margin-top:11px">
+            ${isHost ? `<button class="primary" id="sg">开始对局</button>` : `<span class="msg">等房主开局…</span>`}
+            <button class="ghost" id="lv">离开</button>
+          </div>
+        </div>`;
+      const cp = document.getElementById("cp"); if (cp) cp.onclick = () => net.copyLink(linkFor(code));
+      const sg = document.getElementById("sg"); if (sg) sg.onclick = () => net.startGame();
+      document.getElementById("cs").onclick = () => { net.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+      document.getElementById("lv").onclick = () => { net.leave(); ui.mode = "menu"; render(); };
+      return;
+    }
+
+    const myTurn = !G.over && mySide >= 0 && G.turn === mySide + 1;
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">${mySide === 0 ? "你执红" : (mySide === 1 ? "你执黄" : "观战")}</span>
+          <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "在线" : "重连中"}</span>
+        </div>
+        <div class="status" style="margin-top:9px">${statusHTML()}</div>
+        ${boardHTML()}
+        <div class="row" style="margin-top:11px">
+          <button class="ghost" id="rs">重新开局</button>
+          <button class="ghost" id="lv">离开</button>
+        </div>
+        <div class="sep"></div>
+        <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+        <div class="row"><input type="text" id="ci" placeholder="边下边聊…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+      </div>`;
+    document.getElementById("board").addEventListener("click", ev => {
+      const col = ev.target.closest(".col"); if (!col) return;
+      if (G.over) { flash("本局已结束"); return; }
+      if (mySide < 0) { flash("你在观战"); return; }
+      if (G.turn !== mySide + 1) { flash("现在不是你的回合"); return; }
+      if (dropRow(G.b, Number(col.dataset.c)) < 0) { flash("这一列满了"); return; }
+      net.sendMove({ c: Number(col.dataset.c) });
+    });
+    document.getElementById("rs").onclick = () => net.sendControl({ t: "reset" });
+    document.getElementById("lv").onclick = () => { net.leave(); ui.mode = "menu"; render(); };
+    document.getElementById("cs").onclick = () => { net.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+  }
+
+  function render() {
+    if (ui.mode === "online") return renderOnline();
+    if (ui.mode === "local") return renderLocal();
+    renderMenu();
+  }
+  net.setRender(() => { if (ui.mode === "online") renderOnline(); });
+
+  (function boot() {
+    reset();
+    const m = (location.hash || "").match(/#r=([A-Z0-9]{3,6})/i);
+    if (m) { ui.mode = "online"; net.start("guest", m[1].toUpperCase(), "玩家" + Math.floor(Math.random() * 90 + 10)); render(); return; }
+    renderMenu();
+  })();
+})();
+</script>
+</body>
+</html>

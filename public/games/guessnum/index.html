@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>猜数字 · 几A几B</title>
+<meta name="description" content="猜数字（几A几B）：四位不重复数字，A 是数字与位置都对，B 是数字对位置错；单机破译 AI 的谜底，或联机互相猜。">
+<style>
+  :root { color-scheme: dark; --bg:#0f1424; --card:#171f31; --line:#28344b; --fg:#e9eeff;
+          --muted:#96a3bd; --accent:#c084fc; --ok:#3ddc97; --warn:#ffd27a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; min-height:100vh; padding:16px 12px 44px;
+         background: radial-gradient(900px 480px at 50% -10%, #1a1b3d 0%, var(--bg) 62%);
+         color:var(--fg); font:15.5px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { width:min(620px,100%); margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px;
+          margin-bottom:12px; box-shadow:0 12px 30px rgba(0,0,0,.4); }
+  h1 { font-size:21px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:12.5px; margin:0 0 10px; }
+  h3 { font-size:13px; color:var(--accent); margin:0 0 8px; letter-spacing:.04em; }
+  button { font:inherit; cursor:pointer; border-radius:11px; border:1px solid transparent; background:#242d44;
+           color:var(--fg); padding:8px 14px; transition:transform .07s; }
+  button:active { transform:translateY(1px); } button:disabled { opacity:.42; cursor:not-allowed; }
+  button.primary { background:linear-gradient(180deg,#8b5cf6,#6d3fd1); color:#fff; font-weight:650; }
+  button.ghost { background:transparent; border-color:var(--line); color:var(--muted); }
+  input[type=text] { font:inherit; color:var(--fg); background:#101828; border:1px solid var(--line);
+                     border-radius:10px; padding:8px 11px; min-width:0; font-family:ui-monospace,Consolas,monospace;
+                     letter-spacing:.18em; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .guess { display:flex; align-items:center; gap:12px; padding:7px 10px; border-radius:10px;
+           background:#1b2437; border:1px solid var(--line); margin-bottom:6px; }
+  .guess .num { font-family:ui-monospace,Consolas,monospace; letter-spacing:.2em; font-weight:700; }
+  .guess .fb { margin-left:auto; color:var(--warn); font-weight:650; font-size:13.5px; }
+  .guess .fb.win { color:var(--ok); }
+  .tries { font-size:12.5px; color:var(--muted); margin-bottom:8px; }
+  .log { font-size:12.5px; color:var(--muted); max-height:160px; overflow:auto; line-height:1.85; }
+  .chat { max-height:140px; overflow:auto; display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
+  .chat div { font-size:12.8px; } .chat .sys { color:var(--muted); font-size:12px; }
+  .chat .who { color:var(--accent); margin-right:5px; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11.5px;
+          background:#121a2c; border:1px solid var(--line); color:var(--muted); }
+  .pill.on { color:var(--ok); border-color:#1f4a35; }
+  .sep { height:1px; background:var(--line); margin:11px 0; }
+  .msg { color:var(--muted); font-size:12.5px; line-height:1.8; }
+  .secret { font-family:ui-monospace,Consolas,monospace; letter-spacing:.3em; font-size:26px;
+            font-weight:800; color:var(--accent); margin:6px 0; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; }
+  .pl { display:flex; align-items:center; gap:8px; background:#1b2438; border:1px solid var(--line);
+        border-radius:11px; padding:8px 10px; font-size:13.5px; }
+  .pl .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pl.me { border-color:var(--accent); }
+  #flash { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(18px);
+           background:#2a2350; border:1px solid var(--line); color:#fff; padding:9px 15px; border-radius:11px;
+           font-size:13.5px; opacity:0; pointer-events:none; transition:.22s; z-index:900; max-width:86vw; }
+  #flash.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+<div id="flash"></div>
+<script src="../_room.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const LEN = 4;
+  const digitsOK = t => /^[1-9]{4}$/.test(t) && new Set(t.split("")).size === LEN;
+  const newSecret = () => {
+    const pool = "123456789".split("");
+    let s = "";
+    for (let i = 0; i < LEN; i++) s += pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    return s;
+  };
+  function feedback(secret, guess) {
+    let a = 0, b = 0;
+    for (let i = 0; i < LEN; i++) {
+      if (guess[i] === secret[i]) a++;
+      else if (secret.indexOf(guess[i]) >= 0) b++;
+    }
+    return { a, b };
+  }
+
+  /* ================= 单机：破译 AI 的谜底 ================= */
+  const S = { secret: newSecret(), tries: [], done: false };
+
+  /* ================= 联机 adapter（_room.js） ================= */
+  function initGame(players) {
+    return {
+      phase: "set", turn: 0, secrets: {}, guesses: [], winner: null, reason: "",
+      players: players.map((p, i) => ({ name: String(p.name || "玩家").slice(0, 10), seat: i, alive: true })),
+      logs: ["各自先设一个 4 位不重复数字（1–9，不能有 0），设好以后开始互猜。"]
+    };
+  }
+  function act(st, msg) {
+    const type = msg.type, data = msg.data || {}, seat = msg.seat;
+    if (!st || st.winner) return { ok: false };
+    const ns = JSON.parse(JSON.stringify(st));
+    if (type === "set" && ns.phase === "set") {
+      const t = String(data.digits || "");
+      if (!digitsOK(t) || ns.secrets[seat]) return { ok: false };
+      ns.secrets[seat] = t;
+      ns.logs.push("「" + ns.players[seat].name + "」已设好谜底。");
+      const n = ns.players.length;
+      if (Object.keys(ns.secrets).length >= 2) {
+        ns.phase = "play"; ns.turn = 0;
+        ns.logs.push("双方都设好了，开始互猜。");
+      }
+      return { ok: true, state: ns };
+    }
+    if (type === "guess" && ns.phase === "play") {
+      if (seat !== ns.turn) return { ok: false };
+      const t = String(data.digits || "");
+      if (!digitsOK(t)) return { ok: false };
+      if (ns.secrets[seat] === t) return { ok: false };
+      const foe = 1 - seat;
+      const fb = feedback(ns.secrets[foe], t);
+      ns.guesses.push({ by: seat, txt: t, a: fb.a, b: fb.b });
+      ns.logs.push("「" + ns.players[seat].name + "」猜 " + t + " → " + fb.a + "A" + fb.b + "B");
+      if (fb.a === LEN) {
+        ns.winner = seat + 1; ns.phase = "end";
+        ns.reason = "「" + ns.players[seat].name + "」先猜中对方的谜底。";
+        ns.logs.push(ns.reason);
+      } else ns.turn = foe;
+      return { ok: true, state: ns };
+    }
+    return { ok: false };
+  }
+  function pubView(st) {
+    if (!st) return { phase: "lobby", players: [], guesses: [], logs: [] };
+    return {
+      phase: st.phase, turn: st.turn, winner: st.winner, reason: st.reason,
+      players: st.players, guesses: st.guesses.slice(-30), logs: st.logs.slice(-20),
+      secrets: st.winner ? st.secrets : null
+    };
+  }
+  function over(st) { return st && st.winner ? { winner: st.winner, reason: st.reason } : null; }
+  function privFor(st, seat) {
+    const p = st && st.players && st.players[seat];
+    if (!p) return null;
+    const v = { seat, name: p.name, phase: st.phase, canAct: false, prompt: "", info: "", secret: st.secrets[seat] || "", last: null };
+    const mine = st.guesses.filter(g => g.by === seat);
+    if (mine.length) v.last = mine[mine.length - 1];
+    if (st.winner) return v;
+    if (st.phase === "set") {
+      v.canAct = !st.secrets[seat];
+      v.prompt = "设一个 4 位不重复数字作为你的谜底（1–9，别让对方看到）";
+    } else if (st.phase === "play") {
+      v.canAct = st.turn === seat;
+      v.prompt = v.canAct ? "轮到你了：猜对方的 4 位数字" : "等对方猜";
+      v.info = v.last ? ("你上次猜 " + v.last.txt + " → " + v.last.a + "A" + v.last.b + "B") : "";
+    }
+    return v;
+  }
+  const ADAPTER = { initGame, act, pubView, privView: (st, s) => privFor(st, s), over };
+  const room = RoomNet.create({ ns: "guessnum/v1/", minPlayers: 2, maxPlayers: 2, adapter: ADAPTER, maxLen: 10, flash: m => flash(m) });
+
+  /* ================= 界面 ================= */
+  const ui = { mode: "menu", name: "" };
+  const root = document.getElementById("root");
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function flash(m) { const el = document.getElementById("flash"); if (!el) return; el.textContent = m; el.classList.add("show"); clearTimeout(flash._t); flash._t = setTimeout(() => el.classList.remove("show"), 2200); }
+  const linkFor = code => location.origin + location.pathname + "#r=" + code;
+
+  function renderMenu() {
+    root.innerHTML = `
+      <div class="card">
+        <h1>猜数字</h1>
+        <p class="sub">4 位不重复数字 · A＝数字和位置都对 · B＝数字对但位置错</p>
+        <div class="row"><button class="primary" id="solo">单机：破译谜底</button></div>
+        <div class="sep"></div>
+        <p class="msg">规则：你在 4 位里猜，系统告诉你几 A 几 B；4A 就是猜中。步数越少越厉害。</p>
+      </div>
+      <div class="card">
+        <h3>联机互猜</h3>
+        <div class="row"><input type="text" id="nm" placeholder="你的昵称" maxlength="10" style="flex:1" value="${esc(ui.name)}"></div>
+        <div class="row" style="margin-top:9px">
+          <button class="primary" id="cr">创建房间</button>
+          <input type="text" id="rc" placeholder="房号" maxlength="4" style="width:96px;text-transform:uppercase">
+          <button id="jn">加入</button>
+        </div>
+        <p class="msg" style="margin-top:9px">双方各自设谜底，然后轮流猜对方；先猜出 4A 的人赢。</p>
+      </div>`;
+    document.getElementById("solo").onclick = () => { S.secret = newSecret(); S.tries = []; S.done = false; ui.mode = "solo"; render(); };
+    document.getElementById("cr").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "房主";
+      ui.mode = "online"; room.start("host", room.newRoom(), ui.name); render();
+    };
+    document.getElementById("jn").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "玩家";
+      const rc = (document.getElementById("rc").value || "").trim().toUpperCase();
+      if (rc.length < 3) { flash("房号不对"); return; }
+      ui.mode = "online"; room.start("guest", rc, ui.name); render();
+    };
+  }
+
+  function renderSolo() {
+    const last = S.tries[S.tries.length - 1];
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">单机</span><button class="ghost" id="back">回菜单</button>
+        </div>
+        <h3 style="margin-top:12px">你的猜测</h3>
+        <div class="row">
+          <input type="text" id="gs" maxlength="4" inputmode="numeric" placeholder="1234" style="width:150px;font-size:20px">
+          <button class="primary" id="go">提交</button>
+        </div>
+        <p class="msg">1–9、四位不重复，例如 1357。</p>
+        <div class="sep"></div>
+        <div class="tries">已猜 ${S.tries.length} 次${S.tries.length >= 6 ? "（一般 6 次内能出结果）" : ""}</div>
+        ${S.tries.map(t => `<div class="guess"><span class="num">${t.txt}</span><span class="fb ${t.a === LEN ? "win" : ""}">${t.a}A${t.b}B</span></div>`).join("") || `<div class="msg">还没有猜过。</div>`}
+        ${S.done ? `<div class="sep"></div><p class="msg">谜底就是 ${S.secret}，你用了 ${S.tries.length} 次。${last && last.a === LEN ? "" : ""}</p>` : ""}
+        <div class="row" style="margin-top:10px"><button class="ghost" id="rs">换一个谜底</button></div>
+      </div>`;
+    document.getElementById("back").onclick = () => { ui.mode = "menu"; render(); };
+    document.getElementById("rs").onclick = () => { S.secret = newSecret(); S.tries = []; S.done = false; render(); };
+    const submit = () => {
+      const t = (document.getElementById("gs").value || "").trim();
+      if (!digitsOK(t)) { flash("要 4 位、1–9、且不能重复"); return; }
+      if (S.done) return;
+      const fb = feedback(S.secret, t);
+      S.tries.push({ txt: t, a: fb.a, b: fb.b });
+      if (fb.a === LEN) S.done = true;
+      render();
+    };
+    document.getElementById("go").onclick = submit;
+    document.getElementById("gs").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+    if (!S.done) document.getElementById("gs").focus();
+  }
+
+  function renderOnline() {
+    const NET = room.net, HOST = room.host, isHost = NET.role === "host";
+    const seats = isHost ? (HOST.seats || []) : (NET.seats || []);
+    const started = isHost ? HOST.started : !!(NET.pub && NET.pub.phase && NET.pub.phase !== "lobby");
+
+    if (!started) {
+      const code = NET.room || "-";
+      root.innerHTML = `
+        <div class="card">
+          <h1>房间 ${esc(code)}</h1>
+          <div class="row" style="margin:6px 0 9px">
+            <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "已连中继" : "连接中…"}</span>
+            <span class="pill ${isHost ? "on" : ""}">${isHost ? "房主" : "挑战者"}</span>
+          </div>
+          <div class="row"><input type="text" id="lnk" readonly value="${esc(linkFor(code))}" style="flex:1;font-size:12px"><button id="cp">复制</button></div>
+          <div class="sep"></div><h3>座位 ${seats.length} / 2</h3>
+          <div class="grid2">${seats.map((s, i) => `<div class="pl"><span class="nm">${i + 1}. ${esc(s.name)}</span></div>`).join("") || `<div class="msg">等对手进来…</div>`}</div>
+          <div class="sep"></div>
+          <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+          <div class="row"><input type="text" id="ci" placeholder="发条消息…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+          <div class="row" style="margin-top:11px">
+            ${isHost ? `<button class="primary" id="sg" ${seats.length < 2 ? "disabled" : ""}>开始</button>` : `<span class="msg">等房主开局…</span>`}
+            <button class="ghost" id="lv">离开</button>
+          </div>
+        </div>`;
+      const cp = document.getElementById("cp"); if (cp) cp.onclick = () => room.copyLink(linkFor(code));
+      const sg = document.getElementById("sg"); if (sg) sg.onclick = () => room.startGame();
+      document.getElementById("cs").onclick = () => { room.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+      document.getElementById("lv").onclick = () => { room.leave(); ui.mode = "menu"; render(); };
+      return;
+    }
+
+    const pub = isHost ? pubView(HOST.state) : (NET.pub || {});
+    const me = isHost ? privFor(HOST.state, room.mySeat()) : (NET.priv || null);
+    const ended = pub.winner;
+
+    let body = "";
+    if (ended) {
+      body = `<h3>${esc(pub.reason || "")}</h3>
+        <p class="msg">谜底：你 ${esc(me && me.secret || "—")}　对方 ${esc((pub.secrets && pub.secrets[1 - (me ? me.seat : 0)]) || "—")}</p>`;
+    } else if (me && me.phase === "set") {
+      body = `<h3>设你的谜底</h3>
+        <div class="row"><input type="text" id="ss" maxlength="4" inputmode="numeric" placeholder="例如 2468" style="width:150px;font-size:20px">
+          <button class="primary" id="ssb">确定</button></div>
+        <p class="msg">1–9、四位不重复。设好后不能改。${me.secret ? "你已设：<b>" + esc(me.secret) + "</b>" : ""}</p>`;
+    } else if (me) {
+      body = `<h3>${me.canAct ? "轮到你猜" : "等对方猜"}</h3>
+        <p class="msg">你的谜底：<b>${esc(me.secret || "—")}</b>${me.info ? "　·　" + esc(me.info) : ""}</p>
+        ${me.canAct ? `<div class="row"><input type="text" id="gs" maxlength="4" inputmode="numeric" placeholder="猜对方的" style="width:150px;font-size:20px"><button class="primary" id="go">提交</button></div>` : ""}`;
+    }
+
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">房间 ${esc(NET.room || "")}</span>
+          <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "在线" : "重连中"}</span>
+        </div>
+        ${body}
+        <div class="sep"></div>
+        <h3>交手记录</h3>
+        <div class="log">${(pub.guesses || []).slice().reverse().map(g => `「${esc((pub.players[g.by] || {}).name || "?")}」猜 <b>${g.txt}</b> → ${g.a}A${g.b}B`).join("<br>") || "还没有人猜过。"}</div>
+        <div class="sep"></div>
+        <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+        <div class="row"><input type="text" id="ci" placeholder="边猜边聊…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+        <div class="row" style="margin-top:10px"><button class="ghost" id="lv">离开</button></div>
+      </div>`;
+
+    const ssb = document.getElementById("ssb");
+    if (ssb) ssb.onclick = () => {
+      const t = (document.getElementById("ss").value || "").trim();
+      if (!digitsOK(t)) { flash("要 4 位、1–9、且不能重复"); return; }
+      room.send("set", { digits: t });
+    };
+    const go = document.getElementById("go");
+    if (go) go.onclick = () => {
+      const t = (document.getElementById("gs").value || "").trim();
+      if (!digitsOK(t)) { flash("要 4 位、1–9、且不能重复"); return; }
+      room.send("guess", { digits: t });
+    };
+    document.getElementById("cs").onclick = () => { room.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+    document.getElementById("lv").onclick = () => { room.leave(); ui.mode = "menu"; render(); };
+  }
+
+  function render() {
+    if (ui.mode === "online") return renderOnline();
+    if (ui.mode === "solo") return renderSolo();
+    renderMenu();
+  }
+  room.setRender(() => { if (ui.mode === "online") renderOnline(); });
+
+  (function boot() {
+    const m = (location.hash || "").match(/#r=([A-Z0-9]{3,6})/i);
+    if (m) { ui.mode = "online"; room.start("guest", m[1].toUpperCase(), "玩家" + Math.floor(Math.random() * 90 + 10)); render(); return; }
+    renderMenu();
+  })();
+})();
+</script>
+</body>
+</html>

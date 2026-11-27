@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>石头剪刀布 · 会读习惯的对手</title>
+<meta name="description" content="石头剪刀布：单机对手会统计你的出招习惯与连招规律来预测，联机两人同时出手，五局三胜。">
+<style>
+  :root { color-scheme: dark; --bg:#0d1119; --card:#161c29; --line:#28324a; --fg:#e9eeff;
+          --muted:#95a2ba; --accent:#7dd3fc; --ok:#3ddc97; --bad:#ff7b8a; --gold:#ffd27a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; min-height:100vh; padding:16px 12px 44px;
+         background: radial-gradient(900px 480px at 50% -10%, #12202f 0%, var(--bg) 62%);
+         color:var(--fg); font:15.5px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { width:min(620px,100%); margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px;
+          margin-bottom:12px; box-shadow:0 12px 30px rgba(0,0,0,.42); }
+  h1 { font-size:21px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:12.5px; margin:0 0 10px; }
+  h3 { font-size:13px; color:var(--accent); margin:0 0 8px; letter-spacing:.04em; }
+  button { font:inherit; cursor:pointer; border-radius:12px; border:1px solid transparent; background:#1e2737;
+           color:var(--fg); padding:8px 14px; transition:transform .07s; }
+  button:active { transform:translateY(1px); } button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:linear-gradient(180deg,#3f94d6,#2568a8); color:#fff; font-weight:650; }
+  button.ghost { background:transparent; border-color:var(--line); color:var(--muted); }
+  input[type=text] { font:inherit; color:var(--fg); background:#0e1622; border:1px solid var(--line);
+                     border-radius:10px; padding:8px 11px; min-width:0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .moves { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:12px 0; }
+  .mv { background:#1c2636; border:1px solid var(--line); border-radius:14px; padding:16px 8px 12px;
+        display:flex; flex-direction:column; align-items:center; gap:6px; font-size:13px; color:var(--muted); cursor:pointer; }
+  .mv:hover { border-color:var(--accent); background:#213049; }
+  .mv .em { font-size:34px; line-height:1; }
+  .mv.chosen { border-color:var(--accent); background:#213049; color:var(--fg); }
+  .arena { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; margin:12px 0 6px; }
+  .side { background:#1b2434; border:1px solid var(--line); border-radius:14px; padding:12px; text-align:center; }
+  .side .em { font-size:38px; line-height:1.2; }
+  .side .who { font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .vs { font-size:13px; color:var(--muted); }
+  .score { font-size:22px; font-weight:800; letter-spacing:.1em; text-align:center; margin:4px 0 10px; }
+  .score .a { color:var(--ok); } .score .b { color:var(--bad); }
+  .log { font-size:12.5px; color:var(--muted); max-height:150px; overflow:auto; line-height:1.85; }
+  .chat { max-height:130px; overflow:auto; display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
+  .chat div { font-size:12.8px; } .chat .sys { color:var(--muted); font-size:12px; }
+  .chat .who { color:var(--accent); margin-right:5px; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11.5px;
+          background:#0e1a26; border:1px solid var(--line); color:var(--muted); }
+  .pill.on { color:var(--ok); border-color:#1f4a35; }
+  .sep { height:1px; background:var(--line); margin:11px 0; }
+  .msg { color:var(--muted); font-size:12.5px; line-height:1.8; }
+  .hint { background:#22261a; border:1px solid #3f4526; color:var(--gold); border-radius:11px;
+          padding:9px 12px; font-size:12.5px; line-height:1.75; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; }
+  .pl { display:flex; align-items:center; gap:8px; background:#1b2438; border:1px solid var(--line);
+        border-radius:11px; padding:8px 10px; font-size:13.5px; }
+  .pl .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pl.me { border-color:var(--accent); }
+  #flash { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(18px);
+           background:#22304a; border:1px solid var(--line); color:#fff; padding:9px 15px; border-radius:11px;
+           font-size:13.5px; opacity:0; pointer-events:none; transition:.22s; z-index:900; max-width:86vw; }
+  #flash.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+<div id="flash"></div>
+<script src="../_room.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const MOVES = { 1: { em: "✊", name: "石头" }, 2: { em: "✋", name: "布" }, 3: { em: "✌️", name: "剪刀" } };
+  const BEATS = { 1: 3, 2: 1, 3: 2 };            // 1 石头赢剪刀；2 布赢石头；3 剪刀赢布
+  const COUNTER = c => ({ 1: 2, 2: 3, 3: 1 })[c]; // 能赢 c 的手势
+
+  /* ================= 单机：会读习惯的对手 ================= */
+  const AI = {
+    hist: [],           // 用户历史出招
+    score: { p: 0, a: 0 },   // 玩家：AI
+    round: 0,
+    lastPred: 0, lastAi: 0, lastYou: 0
+  };
+
+  function decayCounts() {
+    // 越近的出招权重越高：指数遗忘
+    const w = { 1: 0, 2: 0, 3: 0 };
+    const n = AI.hist.length;
+    for (let i = 0; i < n; i++) {
+      const wt = Math.pow(0.82, n - 1 - i);
+      w[AI.hist[i]] += wt;
+    }
+    return w;
+  }
+  function predictYou() {
+    const n = AI.hist.length;
+    const sc = { 1: 0, 2: 0, 3: 0 };
+    // 1) 频率偏好
+    const w = decayCounts();
+    const tot = w[1] + w[2] + w[3] || 1;
+    for (const c of [1, 2, 3]) sc[c] += (w[c] / tot) * 2.2;
+    // 2) 上一手之后的转移
+    if (n >= 2) {
+      const after = { 1: 0, 2: 0, 3: 0 }, total = { 1: 0, 2: 0, 3: 0 };
+      for (let i = 0; i < n - 1; i++) {
+        total[AI.hist[i]]++;
+        if (AI.hist[i] === AI.hist[n - 1]) after[AI.hist[i + 1]]++;
+      }
+      const last = AI.hist[n - 1];
+      if (total[last] >= 2) for (const c of [1, 2, 3]) sc[c] += (after[c] / total[last]) * 2.6;
+    }
+    // 3) 赢了就重复、输了就换（常见人类习惯）
+    if (n >= 2) {
+      const you = AI.hist[n - 1], prevAi = AI.lastAi, prevYou = AI.hist[n - 2];
+      if (prevAi) {
+        const youWon = BEATS[prevYou] === prevAi, youLost = BEATS[prevAi] === prevYou;
+        if (youWon) sc[you] += 1.4;                       // 赢了多半继续出同一手
+        if (youLost) sc[COUNTER(prevAi)] += 1.2;          // 输了常改出克制上一手的手势
+      }
+    }
+    let best = 1, bv = -1;
+    for (const c of [1, 2, 3]) if (sc[c] > bv) { bv = sc[c]; best = c; }
+    return best;
+  }
+  function aiPlay(you) {
+    const pred = predictYou();
+    AI.lastPred = pred;
+    // 大部分时候按预测出克制手，偶尔随机，防止被反读
+    const move = Math.random() < 0.18 ? 1 + Math.floor(Math.random() * 3) : COUNTER(pred);
+    AI.hist.push(you);
+    if (AI.hist.length > 60) AI.hist.shift();
+    AI.lastAi = move; AI.lastYou = you; AI.round++;
+    if (move === you) return { move, pred, res: 0 };
+    if (BEATS[you] === move) { AI.score.p++; return { move, pred, res: 1 }; }
+    AI.score.a++; return { move, pred, res: -1 };
+  }
+
+  /* ================= 联机 adapter（五局三胜，同时出手） ================= */
+  function initGame(players) {
+    return {
+      phase: "pick", round: 1, picks: {}, score: { 0: 0, 1: 0 }, last: null,
+      winner: null, reason: "",
+      players: players.map((p, i) => ({ name: String(p.name || "玩家").slice(0, 10), seat: i, alive: true })),
+      logs: ["五局三胜：双方各出手势，都出了才揭晓。"]
+    };
+  }
+  function act(st, msg) {
+    const type = msg.type, data = msg.data || {}, seat = msg.seat;
+    if (!st || st.winner) return { ok: false };
+    if (type !== "pick" || st.phase !== "pick") return { ok: false };
+    const c = Number(data.c);
+    if (![1, 2, 3].includes(c)) return { ok: false };
+    if (st.picks[seat] !== undefined) return { ok: false };
+    const ns = JSON.parse(JSON.stringify(st));
+    ns.picks[seat] = c;
+    if (Object.keys(ns.picks).length === 2) {
+      const a = ns.picks[0], b = ns.picks[1];
+      let res = 0;
+      if (a !== b) res = BEATS[a] === b ? 1 : 2;   // 1 = 先手赢，2 = 后手赢
+      if (res === 1) ns.score[0]++; else if (res === 2) ns.score[1]++;
+      const txt = MOVES[a].name + " vs " + MOVES[b].name + " → " +
+        (res === 0 ? "平" : ("「" + ns.players[res - 1].name + "」赢"));
+      ns.logs.push("第 " + ns.round + " 局：" + txt);
+      ns.last = { a, b, res, round: ns.round };
+      if (ns.score[0] >= 3 || ns.score[1] >= 3) {
+        const w = ns.score[0] >= 3 ? 0 : 1;
+        ns.winner = w + 1; ns.phase = "end";
+        ns.reason = "「" + ns.players[w].name + "」以 " + ns.score[w] + ":" + ns.score[1 - w] + " 拿下这盘。";
+        ns.logs.push(ns.reason);
+      } else {
+        ns.round++; ns.picks = {};
+        ns.logs.push("下一局，各自出手。");
+      }
+    }
+    return { ok: true, state: ns };
+  }
+  function pubView(st) {
+    if (!st) return { phase: "lobby", players: [], picks: {}, logs: [] };
+    const both = st.phase === "end" || Object.keys(st.picks || {}).length === 2;
+    return {
+      phase: st.phase, round: st.round, winner: st.winner, reason: st.reason,
+      score: st.score, last: st.last, players: st.players, logs: st.logs.slice(-20),
+      picks: both ? st.last || st.picks : {}      // 只在双方都出过之后才公开
+    };
+  }
+  function over(st) { return st && st.winner ? { winner: st.winner, reason: st.reason } : null; }
+  function privFor(st, seat) {
+    const p = st && st.players && st.players[seat];
+    if (!p) return null;
+    return {
+      seat, name: p.name, phase: st.phase, canAct: st.phase === "pick" && st.picks[seat] === undefined,
+      picked: st.picks[seat] === undefined ? 0 : st.picks[seat], score: st.score, winner: st.winner
+    };
+  }
+  const ADAPTER = { initGame, act, pubView, privView: (st, s) => privFor(st, s), over };
+  const room = RoomNet.create({ ns: "rps/v1/", minPlayers: 2, maxPlayers: 2, adapter: ADAPTER, maxLen: 10, flash: m => flash(m) });
+
+  /* ================= 界面 ================= */
+  const ui = { mode: "menu", solo: { you: 0, ai: 0, last: null }, name: "" };
+  const root = document.getElementById("root");
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function flash(m) { const el = document.getElementById("flash"); if (!el) return; el.textContent = m; el.classList.add("show"); clearTimeout(flash._t); flash._t = setTimeout(() => el.classList.remove("show"), 2200); }
+  const linkFor = code => location.origin + location.pathname + "#r=" + code;
+
+  function movesHTML(idPrefix, chosen) {
+    return `<div class="moves">` + [1, 2, 3].map(c => `
+      <div class="mv ${chosen === c ? "chosen" : ""}" data-c="${c}" id="${idPrefix}${c}">
+        <div class="em">${MOVES[c].em}</div><div>${MOVES[c].name}</div></div>`).join("") + `</div>`;
+  }
+
+  function renderMenu() {
+    root.innerHTML = `
+      <div class="card">
+        <h1>石头剪刀布</h1>
+        <p class="sub">单机对手会统计你的出招频率、连招规律和输赢后的习惯来猜你下一步</p>
+        <div class="row"><button class="primary" id="solo">单机对 AI</button></div>
+      </div>
+      <div class="card">
+        <h3>联机对战（五局三胜）</h3>
+        <div class="row"><input type="text" id="nm" placeholder="你的昵称" maxlength="10" style="flex:1" value="${esc(ui.name)}"></div>
+        <div class="row" style="margin-top:9px">
+          <button class="primary" id="cr">创建房间</button>
+          <input type="text" id="rc" placeholder="房号" maxlength="4" style="width:96px;text-transform:uppercase">
+          <button id="jn">加入</button>
+        </div>
+        <p class="msg" style="margin-top:9px">两边同时出，都出了才揭晓；先拿到 3 分的人赢。</p>
+      </div>`;
+    document.getElementById("solo").onclick = () => { AI.hist = []; AI.score = { p: 0, a: 0 }; AI.round = 0; ui.solo = { you: 0, ai: 0, last: null }; ui.mode = "solo"; render(); };
+    document.getElementById("cr").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "房主";
+      ui.mode = "online"; room.start("host", room.newRoom(), ui.name); render();
+    };
+    document.getElementById("jn").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "玩家";
+      const rc = (document.getElementById("rc").value || "").trim().toUpperCase();
+      if (rc.length < 3) { flash("房号不对"); return; }
+      ui.mode = "online"; room.start("guest", rc, ui.name); render();
+    };
+  }
+
+  function renderSolo() {
+    const last = ui.solo.last;
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">单机 · 已打 ${AI.round} 回合</span>
+          <button class="ghost" id="back">回菜单</button>
+        </div>
+        <div class="score" style="margin-top:10px"><span class="a">你 ${AI.score.p}</span>　:　<span class="b">${AI.score.a} AI</span></div>
+        ${last ? `<div class="arena">
+          <div class="side"><div class="who">你</div><div class="em">${MOVES[last.you].em}</div><div class="msg">${MOVES[last.you].name}</div></div>
+          <div class="vs">VS</div>
+          <div class="side"><div class="who">AI</div><div class="em">${MOVES[last.move].em}</div><div class="msg">${MOVES[last.move].name}</div></div>
+        </div>
+        <p class="msg" style="text-align:center">${last.res === 1 ? "你赢" : last.res === -1 ? "AI 赢" : "平局"}　·　AI 赛前猜你会出「${MOVES[last.pred].name}」</p>`
+        : `<p class="msg" style="margin-top:12px">选一个手势开始。</p>`}
+        ${movesHTML("m", 0)}
+        <div class="row"><button class="ghost" id="rs">清零重来</button></div>
+        <div class="sep"></div>
+        <div class="hint">AI 的记忆：${AI.hist.length ? "已经记下你最近 " + AI.hist.length + " 手，越往后越准。" : "还没开始记录。"}</div>
+      </div>`;
+    document.getElementById("back").onclick = () => { ui.mode = "menu"; render(); };
+    document.getElementById("rs").onclick = () => { AI.hist = []; AI.score = { p: 0, a: 0 }; AI.round = 0; ui.solo = { you: 0, ai: 0, last: null }; render(); };
+    document.querySelectorAll(".mv").forEach(el => el.onclick = () => {
+      const you = Number(el.dataset.c);
+      const r = aiPlay(you);
+      ui.solo.last = { you, move: r.move, pred: r.pred, res: r.res };
+      render();
+    });
+  }
+
+  function renderOnline() {
+    const NET = room.net, HOST = room.host, isHost = NET.role === "host";
+    const seats = isHost ? (HOST.seats || []) : (NET.seats || []);
+    const started = isHost ? HOST.started : !!(NET.pub && NET.pub.phase && NET.pub.phase !== "lobby");
+
+    if (!started) {
+      const code = NET.room || "-";
+      root.innerHTML = `
+        <div class="card">
+          <h1>房间 ${esc(code)}</h1>
+          <div class="row" style="margin:6px 0 9px">
+            <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "已连中继" : "连接中…"}</span>
+            <span class="pill ${isHost ? "on" : ""}">${isHost ? "房主" : "挑战者"}</span>
+          </div>
+          <div class="row"><input type="text" id="lnk" readonly value="${esc(linkFor(code))}" style="flex:1;font-size:12px"><button id="cp">复制</button></div>
+          <div class="sep"></div><h3>座位 ${seats.length} / 2</h3>
+          <div class="grid2">${seats.map((s, i) => `<div class="pl"><span class="nm">${i + 1}. ${esc(s.name)}</span></div>`).join("") || `<div class="msg">等对手进来…</div>`}</div>
+          <div class="sep"></div>
+          <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+          <div class="row"><input type="text" id="ci" placeholder="发条消息…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+          <div class="row" style="margin-top:11px">
+            ${isHost ? `<button class="primary" id="sg" ${seats.length < 2 ? "disabled" : ""}>开始</button>` : `<span class="msg">等房主开局…</span>`}
+            <button class="ghost" id="lv">离开</button>
+          </div>
+        </div>`;
+      const cp = document.getElementById("cp"); if (cp) cp.onclick = () => room.copyLink(linkFor(code));
+      const sg = document.getElementById("sg"); if (sg) sg.onclick = () => room.startGame();
+      document.getElementById("cs").onclick = () => { room.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+      document.getElementById("lv").onclick = () => { room.leave(); ui.mode = "menu"; render(); };
+      return;
+    }
+
+    const pub = isHost ? pubView(HOST.state) : (NET.pub || {});
+    const me = isHost ? privFor(HOST.state, room.mySeat()) : (NET.priv || null);
+    const seat = me ? me.seat : -1;
+    const sc = pub.score || { 0: 0, 1: 0 };
+    const shown = (!me || me.phase === "pick") ? pub.picks : (pub.last ? { a: pub.last.a, b: pub.last.b } : {});
+    const ended = pub.winner;
+
+    let body = "";
+    if (ended) {
+      body = `<h3>${esc(pub.reason || "")}</h3>
+        <p class="msg">${pub.last ? `最后一局：你 ${MOVES[pub.last[seat === 0 ? "a" : "b"]].name}，对手 ${MOVES[pub.last[seat === 0 ? "b" : "a"]].name}` : ""}</p>`;
+    } else if (me && me.phase === "pick") {
+      body = me.canAct
+        ? `<p class="msg">出你的手势——两个人都出了才揭晓。</p>${movesHTML("m", 0)}`
+        : `<p class="msg">你已经出了，等对方……</p>${movesHTML("m", me.picked)}`;
+    }
+
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">第 ${pub.round || 1} 局</span>
+          <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "在线" : "重连中"}</span>
+        </div>
+        <div class="score" style="margin-top:10px"><span class="a">你 ${sc[seat] !== undefined ? sc[seat] : 0}</span>　:　<span class="b">${sc[1 - seat] !== undefined ? sc[1 - seat] : 0} 对手</span></div>
+        ${shown && shown.a ? `<div class="arena">
+          <div class="side"><div class="who">你</div><div class="em">${MOVES[shown[seat === 0 ? "a" : "b"]].em}</div><div class="msg">${MOVES[shown[seat === 0 ? "a" : "b"]].name}</div></div>
+          <div class="vs">VS</div>
+          <div class="side"><div class="who">对手</div><div class="em">${MOVES[shown[seat === 0 ? "b" : "a"]].em}</div><div class="msg">${MOVES[shown[seat === 0 ? "b" : "a"]].name}</div></div>
+        </div>` : ""}
+        ${body}
+        <div class="sep"></div><h3>记录</h3>
+        <div class="log">${(pub.logs || []).slice().reverse().join("<br>")}</div>
+        <div class="sep"></div>
+        <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+        <div class="row"><input type="text" id="ci" placeholder="放点垃圾话…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+        <div class="row" style="margin-top:10px"><button class="ghost" id="lv">离开</button></div>
+      </div>`;
+    document.querySelectorAll(".mv").forEach(el => el.onclick = () => {
+      if (!me || !me.canAct) return;
+      room.send("pick", { c: Number(el.dataset.c) });
+    });
+    document.getElementById("cs").onclick = () => { room.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+    document.getElementById("lv").onclick = () => { room.leave(); ui.mode = "menu"; render(); };
+  }
+
+  function render() {
+    if (ui.mode === "online") return renderOnline();
+    if (ui.mode === "solo") return renderSolo();
+    renderMenu();
+  }
+  room.setRender(() => { if (ui.mode === "online") renderOnline(); });
+
+  (function boot() {
+    const m = (location.hash || "").match(/#r=([A-Z0-9]{3,6})/i);
+    if (m) { ui.mode = "online"; room.start("guest", m[1].toUpperCase(), "玩家" + Math.floor(Math.random() * 90 + 10)); render(); return; }
+    renderMenu();
+  })();
+})();
+</script>
+</body>
+</html>
