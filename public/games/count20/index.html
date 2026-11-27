@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>抢二十 · 报数博弈</title>
+<meta name="description" content="抢二十：轮流报 1–2 个连续数字，谁先报到 20 谁赢。AI 会守住 3 的节拍，单机、同屏、联机都能玩。">
+<style>
+  :root { color-scheme: dark; --bg:#0c1210; --card:#141f1a; --line:#273a31; --fg:#eaf4ee;
+          --muted:#93a8a0; --accent:#5be2a1; --hot:#ffd27a; --bad:#ff8f9c; --ok:#3ddc97; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; min-height:100vh; padding:16px 12px 44px;
+         background: radial-gradient(880px 470px at 50% -12%, #14261f 0%, var(--bg) 64%);
+         color:var(--fg); font:15.5px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { width:min(600px,100%); margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px;
+          margin-bottom:12px; box-shadow:0 12px 30px rgba(0,0,0,.42); }
+  h1 { font-size:21px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:12.5px; margin:0 0 10px; }
+  h3 { font-size:13px; color:var(--accent); margin:0 0 8px; letter-spacing:.04em; }
+  button { font:inherit; cursor:pointer; border-radius:11px; border:1px solid transparent; background:#1e2f28;
+           color:var(--fg); padding:9px 14px; transition:transform .07s; }
+  button:active { transform:translateY(1px); } button:disabled { opacity:.42; cursor:not-allowed; }
+  button.primary { background:linear-gradient(180deg,#43c78c,#2a9469); color:#04140d; font-weight:700; }
+  button.ghost { background:transparent; border-color:var(--line); color:var(--muted); }
+  input[type=text] { font:inherit; color:var(--fg); background:#0d1915; border:1px solid var(--line);
+                     border-radius:10px; padding:8px 11px; min-width:0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .now { text-align:center; margin:10px 0 6px; }
+  .now .big { font-size:40px; font-weight:800; line-height:1.1; color:var(--hot); font-variant-numeric:tabular-nums; }
+  .now .lab { font-size:12.5px; color:var(--muted); }
+  .said { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+  .said .n { min-width:34px; text-align:center; padding:4px 6px; border-radius:9px; background:#182821;
+             border:1px solid var(--line); font-family:ui-monospace,Consolas,monospace; font-size:13px; color:var(--muted); }
+  .said .n.mine { border-color:#2f6b4f; color:var(--hot); }
+  .said .n.last { background:#22331f; border-color:#4c6b2f; }
+  .said .n.goal { color:var(--ok); border-color:#2f6b4f; }
+  .chat { max-height:130px; overflow:auto; display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
+  .chat div { font-size:12.8px; } .chat .sys { color:var(--muted); font-size:12px; }
+  .chat .who { color:var(--accent); margin-right:5px; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11.5px;
+          background:#0e1a15; border:1px solid var(--line); color:var(--muted); }
+  .pill.on { color:var(--ok); border-color:#1f4a35; }
+  .sep { height:1px; background:var(--line); margin:11px 0; }
+  .msg { color:var(--muted); font-size:12.5px; line-height:1.8; }
+  .hint { background:#1d2318; border:1px solid #3c4526; color:var(--hot); border-radius:11px;
+          padding:9px 12px; font-size:12.5px; line-height:1.75; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; }
+  .pl { display:flex; align-items:center; gap:8px; background:#16241d; border:1px solid var(--line);
+        border-radius:11px; padding:8px 10px; font-size:13.5px; }
+  .pl .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pl.me { border-color:var(--accent); }
+  .log { font-size:12.5px; color:var(--muted); max-height:130px; overflow:auto; line-height:1.85; }
+  #flash { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(18px);
+           background:#1d3128; border:1px solid var(--line); color:#fff; padding:9px 15px; border-radius:11px;
+           font-size:13.5px; opacity:0; pointer-events:none; transition:.22s; z-index:900; max-width:86vw; }
+  #flash.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+<div id="flash"></div>
+<script src="../_net.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const TARGET = 20;
+  const G = { next: 1, turn: 1, said: [], over: false, win: 0, ply: 0 };
+  function reset() { G.next = 1; G.turn = 1; G.said = []; G.over = false; G.win = 0; G.ply = 0; }
+  function canTake(n) { return n >= 1 && n <= 2 && G.next + n - 1 <= TARGET; }
+  function place(mv) {
+    const n = Number(mv.n);
+    if (G.over || !canTake(n)) return false;
+    const p = G.turn;
+    for (let k = 0; k < n; k++) G.said.push({ v: G.next + k, by: p });
+    const last = G.next + n - 1;
+    G.ply++;
+    if (last === TARGET) { G.over = true; G.win = p; }
+    else { G.next = last + 1; G.turn = 3 - p; }
+    return true;
+  }
+  function snap() { return { next: G.next, turn: G.turn, said: G.said.slice(), over: G.over, win: G.win, ply: G.ply }; }
+  function load(s) {
+    if (!s) return;
+    G.next = s.next || 1; G.turn = s.turn || 1; G.said = (s.said || []).slice();
+    G.over = !!s.over; G.win = s.win || 0; G.ply = s.ply || 0;
+  }
+
+  /* ---- AI：守住「报到 2 mod 3」的节点，先手一旦松手就再赢不回来 ---- */
+  function aiMove() {
+    const n1 = 1, n2 = canTake(2) ? 2 : 1;
+    const cands = [n1, n2].filter((v, i, a) => v >= 1 && a.indexOf(v) === i && canTake(v));
+    // 能直接报到 20 就走
+    for (const n of cands) if (G.next + n - 1 === TARGET) return { n };
+    // 否则走到 2、5、8、11、14、17 这些「节拍点」
+    for (const n of cands) if ((G.next + n - 1) % 3 === 2) return { n };
+    // 已经被抢走节拍：随便走，等对方失手
+    return { n: Math.random() < 0.5 ? 1 : (canTake(2) ? 2 : 1) };
+  }
+
+  /* ================= 联机 adapter ================= */
+  const ADAPTER = {
+    seatCount: () => 2,
+    initGame: () => { reset(); },
+    state: () => snap(),
+    loadState: s => load(s),
+    applyMove: mv => place(mv),
+    turnSeat: () => G.turn - 1,
+    describeMove: (mv, seat) => (seat === 0 ? "你先" : "对方") + " 报 " + mv.n + " 个",
+    onControl: ctl => { if (ctl && ctl.t === "reset") { reset(); return true; } return false; },
+    describeControl: () => "重新开局"
+  };
+  const net = BoardNet.create({ namespace: "count20/v1/", adapter: ADAPTER, maxLen: 10, clientPrefix: "c20" });
+
+  /* ================= 界面 ================= */
+  const ui = { mode: "menu", vsAI: true, name: "", score: { you: 0, foe: 0 }, losses: 0 };
+  const root = document.getElementById("root");
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function flash(m) { const el = document.getElementById("flash"); if (!el) return; el.textContent = m; el.classList.add("show"); clearTimeout(flash._t); flash._t = setTimeout(() => el.classList.remove("show"), 2200); }
+  const linkFor = code => location.origin + location.pathname + "#r=" + code;
+
+  function saidHTML(mineTurn) {
+    const last = G.said[G.said.length - 1];
+    return `<div class="said">` + G.said.map((s, i) => {
+      const cls = [ "n", s.by === 1 ? "mine" : "", last && i === G.said.length - 1 ? "last" : "", s.v === TARGET ? "goal" : "" ].join(" ");
+      return `<span class="${cls}">${s.v}</span>`;
+    }).join("") + `</div>`;
+  }
+  function nowHTML() {
+    if (G.over) {
+      const who = G.win === 1 ? (ui.vsAI ? "你赢了" : "先手赢") : (ui.vsAI ? "AI 赢了" : "后手赢");
+      return `<div class="now"><div class="big">${TARGET}</div><div class="lab">${who}</div></div>`;
+    }
+    return `<div class="now"><div class="big">${G.next}</div><div class="lab">接下来要报 ${G.next}${canTake(2) ? " 或 " + G.next + "、" + (G.next + 1) : ""}</div></div>`;
+  }
+  function controlsHTML(myTurn) {
+    const d = myTurn ? "" : "disabled";
+    const n2 = canTake(2) ? "" : "disabled";
+    return `<div class="row">
+      <button class="primary" id="one" ${d}>报 ${G.next}</button>
+      <button id="two" ${d} ${n2}>报 ${G.next}、${G.next + 1}</button>
+    </div>`;
+  }
+
+  function renderMenu() {
+    root.innerHTML = `
+      <div class="card">
+        <h1>抢二十</h1>
+        <p class="sub">从 1 开始轮流报数，每次报 1 个或 2 个连续的数字，谁先报到 20 谁赢。</p>
+        <div class="row">
+          <button class="primary" id="ai">单机对 AI（你先）</button>
+          <button id="hot">双人同屏</button>
+        </div>
+        <div class="msg" style="margin-top:9px">你 <b>${ui.score.you}</b> · AI <b>${ui.score.foe}</b></div>
+      </div>
+      <div class="card">
+        <h3>联机对战</h3>
+        <div class="row"><input type="text" id="nm" placeholder="你的昵称" maxlength="10" style="flex:1" value="${esc(ui.name)}"></div>
+        <div class="row" style="margin-top:9px">
+          <button class="primary" id="cr">创建房间</button>
+          <input type="text" id="rc" placeholder="房号" maxlength="4" style="width:96px;text-transform:uppercase">
+          <button id="jn">加入</button>
+        </div>
+        <p class="msg" style="margin-top:9px">房主先手；两边看到的数字完全一致，不用藏什么。</p>
+      </div>`;
+    document.getElementById("ai").onclick = () => { reset(); ui.vsAI = true; ui.mode = "local"; render(); };
+    document.getElementById("hot").onclick = () => { reset(); ui.vsAI = false; ui.mode = "local"; render(); };
+    document.getElementById("cr").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "房主";
+      ui.mode = "online"; net.start("host", net.newRoom(), ui.name); render();
+    };
+    document.getElementById("jn").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "玩家";
+      const rc = (document.getElementById("rc").value || "").trim().toUpperCase();
+      if (rc.length < 3) { flash("房号不对"); return; }
+      ui.mode = "online"; net.start("guest", rc, ui.name); render();
+    };
+  }
+
+  function afterLocalMove() {
+    if (G.over) {
+      if (G.win === 1) ui.score.you++; else { ui.score.foe++; ui.losses++; }
+      render(); return;
+    }
+    render();
+    if (ui.vsAI && G.turn === 2) setTimeout(() => {
+      const mv = aiMove(); if (mv) place(mv);
+      if (G.over) { if (G.win === 1) ui.score.you++; else { ui.score.foe++; ui.losses++; } }
+      render();
+    }, 320);
+  }
+
+  function renderLocal() {
+    const myTurn = !G.over && (ui.vsAI ? G.turn === 1 : true);
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">${ui.vsAI ? "单机对 AI" : "双人同屏"}</span>
+          <button class="ghost" id="back">回菜单</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <span class="pill ${!G.over && G.turn === 1 ? "on" : ""}">${ui.vsAI ? "你" : "先手"}</span>
+          <span class="pill ${!G.over && G.turn === 2 ? "on" : ""}">${ui.vsAI ? "AI" : "后手"}</span>
+          <span class="msg" style="margin-left:auto">${ui.vsAI ? "你" : "先手"} <b>${ui.score.you}</b> · ${ui.vsAI ? "AI" : "后手"} <b>${ui.score.foe}</b></span>
+        </div>
+        ${nowHTML()}
+        ${G.over ? "" : controlsHTML(myTurn)}
+        ${saidHTML()}
+        <div class="row" style="margin-top:6px">
+          <button class="ghost" id="rs">重新开始</button>
+        </div>
+        ${ui.losses >= 2 && !G.over ? `<div class="sep"></div><div class="hint">提示：这局的关键是「不让对手停在 2、5、8、11、14、17」。你每轮报完，最好让最后一个数正好落在 3 的倍数加 2 上——20 也是这种数。</div>` : ""}
+      </div>`;
+    document.getElementById("back").onclick = () => { ui.mode = "menu"; render(); };
+    document.getElementById("rs").onclick = () => { reset(); render(); };
+    const one = document.getElementById("one"), two = document.getElementById("two");
+    if (one) one.onclick = () => { if (!place({ n: 1 })) return; afterLocalMove(); };
+    if (two) two.onclick = () => { if (!place({ n: 2 })) return; afterLocalMove(); };
+  }
+
+  function renderOnline() {
+    const NET = net.net, HOST = net.host, isHost = net.isHost();
+    const seats = isHost ? HOST.seats : NET.seats;
+    const inGame = isHost ? HOST.state !== null : NET.state !== null;
+    const mySide = isHost ? 0 : NET.seatIdx;
+
+    if (!inGame) {
+      const code = NET.room || "-";
+      root.innerHTML = `
+        <div class="card">
+          <h1>房间 ${esc(code)}</h1>
+          <div class="row" style="margin:6px 0 9px">
+            <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "已连中继" : "连接中…"}</span>
+            <span class="pill ${isHost ? "on" : ""}">${isHost ? "房主（先手）" : "挑战者"}</span>
+          </div>
+          <div class="row"><input type="text" id="lnk" readonly value="${esc(linkFor(code))}" style="flex:1;font-size:12px"><button id="cp">复制</button></div>
+          <div class="sep"></div><h3>座位</h3>
+          <div class="grid2">
+            <div class="pl ${isHost ? "me" : ""}"><span class="nm">${esc((seats[0] && seats[0].name) || "空位")}</span><span class="pill">先手</span></div>
+            <div class="pl ${!isHost && NET.seatIdx === 1 ? "me" : ""}"><span class="nm">${esc((seats[1] && seats[1].name) || "空位")}</span><span class="pill">后手</span></div>
+          </div>
+          <div class="sep"></div>
+          <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+          <div class="row"><input type="text" id="ci" placeholder="发条消息…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+          <div class="row" style="margin-top:11px">
+            ${isHost ? `<button class="primary" id="sg">开始对局</button>` : `<span class="msg">等房主开局…</span>`}
+            <button class="ghost" id="lv">离开</button>
+          </div>
+        </div>`;
+      const cp = document.getElementById("cp"); if (cp) cp.onclick = () => net.copyLink(linkFor(code));
+      const sg = document.getElementById("sg"); if (sg) sg.onclick = () => net.startGame();
+      document.getElementById("cs").onclick = () => { net.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+      document.getElementById("lv").onclick = () => { net.leave(); ui.mode = "menu"; render(); };
+      return;
+    }
+
+    const myTurn = !G.over && mySide >= 0 && G.turn === mySide + 1;
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">${mySide === 0 ? "你先手" : (mySide === 1 ? "你后手" : "观战")}</span>
+          <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "在线" : "重连中"}</span>
+        </div>
+        ${nowHTML()}
+        ${G.over ? "" : controlsHTML(myTurn)}
+        ${saidHTML()}
+        <div class="row" style="margin-top:6px">
+          <button class="ghost" id="rs">重新开局</button>
+          <button class="ghost" id="lv">离开</button>
+        </div>
+        <div class="sep"></div>
+        <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+        <div class="row"><input type="text" id="ci" placeholder="边玩边聊…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+      </div>`;
+    const one = document.getElementById("one"), two = document.getElementById("two");
+    if (one) one.onclick = () => { if (!myTurn) { flash("现在不是你的回合"); return; } net.sendMove({ n: 1 }); };
+    if (two) two.onclick = () => { if (!myTurn) { flash("现在不是你的回合"); return; } net.sendMove({ n: 2 }); };
+    document.getElementById("rs").onclick = () => net.sendControl({ t: "reset" });
+    document.getElementById("lv").onclick = () => { net.leave(); ui.mode = "menu"; render(); };
+    document.getElementById("cs").onclick = () => { net.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+  }
+
+  function render() {
+    if (ui.mode === "online") return renderOnline();
+    if (ui.mode === "local") return renderLocal();
+    renderMenu();
+  }
+  net.setRender(() => { if (ui.mode === "online") renderOnline(); });
+
+  (function boot() {
+    reset();
+    const m = (location.hash || "").match(/#r=([A-Z0-9]{3,6})/i);
+    if (m) { ui.mode = "online"; net.start("guest", m[1].toUpperCase(), "玩家" + Math.floor(Math.random() * 90 + 10)); render(); return; }
+    renderMenu();
+  })();
+})();
+</script>
+</body>
+</html>

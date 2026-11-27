@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>井字棋 · 三连成线</title>
+<meta name="description" content="井字棋：3×3 棋盘连成一线即胜。单机 AI 用完全搜索，永远不输；也可以双人同屏或房间码联机。">
+<style>
+  :root { color-scheme: dark; --bg:#0f1117; --card:#171b26; --line:#2a3346; --fg:#eef1f8;
+          --muted:#98a3b8; --accent:#ffb86b; --x:#63b3ed; --o:#ff8fa3; --ok:#3ddc97; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; min-height:100vh; padding:16px 12px 44px;
+         background: radial-gradient(860px 460px at 50% -12%, #1d2130 0%, var(--bg) 64%);
+         color:var(--fg); font:15.5px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { width:min(560px,100%); margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px;
+          margin-bottom:12px; box-shadow:0 12px 30px rgba(0,0,0,.42); }
+  h1 { font-size:21px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:12.5px; margin:0 0 10px; }
+  h3 { font-size:13px; color:var(--accent); margin:0 0 8px; letter-spacing:.04em; }
+  button { font:inherit; cursor:pointer; border-radius:11px; border:1px solid transparent; background:#232a3a;
+           color:var(--fg); padding:8px 14px; transition:transform .07s; }
+  button:active { transform:translateY(1px); }
+  button.primary { background:linear-gradient(180deg,#e8a24c,#c47c2b); color:#1a1206; font-weight:700; }
+  button.ghost { background:transparent; border-color:var(--line); color:var(--muted); }
+  input[type=text] { font:inherit; color:var(--fg); background:#101724; border:1px solid var(--line);
+                     border-radius:10px; padding:8px 11px; min-width:0; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .status { font-size:14px; font-weight:650; }
+  .score { display:flex; gap:14px; font-size:12.5px; color:var(--muted); margin-top:2px; }
+  .score b { color:var(--fg); }
+  #board { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0; }
+  .sq { aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; cursor:pointer;
+        background:#1e2638; border:1px solid var(--line); border-radius:12px;
+        font-size:44px; font-weight:800; line-height:1; user-select:none; }
+  .sq:hover { border-color:var(--accent); }
+  .sq.x { color:var(--x); } .sq.o { color:var(--o); }
+  .sq.win { background:#2b3a2c; border-color:#3f6b45; }
+  .sq.taken { cursor:default; }
+  .chat { max-height:130px; overflow:auto; display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
+  .chat div { font-size:12.8px; } .chat .sys { color:var(--muted); font-size:12px; }
+  .chat .who { color:var(--accent); margin-right:5px; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11.5px;
+          background:#121a28; border:1px solid var(--line); color:var(--muted); }
+  .pill.on { color:var(--ok); border-color:#1f4a35; }
+  .sep { height:1px; background:var(--line); margin:11px 0; }
+  .msg { color:var(--muted); font-size:12.5px; line-height:1.8; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; }
+  .pl { display:flex; align-items:center; gap:8px; background:#1b2334; border:1px solid var(--line);
+        border-radius:11px; padding:8px 10px; font-size:13.5px; }
+  .pl .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pl.me { border-color:var(--accent); }
+  #flash { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(18px);
+           background:#2a2318; border:1px solid var(--line); color:#fff; padding:9px 15px; border-radius:11px;
+           font-size:13.5px; opacity:0; pointer-events:none; transition:.22s; z-index:900; max-width:86vw; }
+  #flash.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap" id="root"></div>
+<div id="flash"></div>
+<script src="../_net.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  const G = { b: new Array(9).fill(0), turn: 1, over: false, win: 0, line: null, ply: 0 };
+  function reset() { G.b = new Array(9).fill(0); G.turn = 1; G.over = false; G.win = 0; G.line = null; G.ply = 0; }
+  function winnerOf(b) {
+    for (const L of LINES) {
+      const v = b[L[0]];
+      if (v && v === b[L[1]] && v === b[L[2]]) return { win: v, line: L };
+    }
+    return null;
+  }
+  function place(i) {
+    if (G.over || i < 0 || i > 8 || G.b[i]) return false;
+    G.b[i] = G.turn; G.ply++;
+    const w = winnerOf(G.b);
+    if (w) { G.over = true; G.win = w.win; G.line = w.line; }
+    else if (G.ply === 9) { G.over = true; G.win = -1; }
+    else G.turn = 3 - G.turn;
+    return true;
+  }
+  function snap() { return { b: G.b.slice(), turn: G.turn, over: G.over, win: G.win, line: G.line, ply: G.ply }; }
+  function load(s) {
+    if (!s) return;
+    G.b = (s.b || []).slice(0, 9); while (G.b.length < 9) G.b.push(0);
+    G.turn = s.turn || 1; G.over = !!s.over; G.win = s.win || 0;
+    G.line = s.line || null; G.ply = s.ply || 0;
+  }
+
+  /* ---- AI（执 O）：完全搜索，理论上不会输 ---- */
+  const memo = new Map();
+  function solve(b) {
+    // 分值统一以 O（AI）为视角：+10 表示 O 赢，-10 表示 O 输
+    const w = winnerOf(b);
+    if (w) return w.win === 2 ? 10 : -10;
+    if (b.every(v => v)) return 0;
+    const k = b.join("");
+    if (memo.has(k)) return memo.get(k);
+    const xN = b.filter(v => v === 1).length, oN = b.filter(v => v === 2).length;
+    const p = xN === oN ? 1 : 2;                  // 该谁走
+    let best = p === 2 ? -99 : 99;
+    for (let i = 0; i < 9; i++) {
+      if (b[i]) continue;
+      const nb = b.slice(); nb[i] = p;
+      const s = solve(nb);
+      best = p === 2 ? Math.max(best, s) : Math.min(best, s);
+    }
+    memo.set(k, best);
+    return best;
+  }
+  function bestMove() {
+    const b = G.b.slice();
+    let best = { score: -99, i: -1 };
+    for (let i = 0; i < 9; i++) {
+      if (b[i]) continue;
+      const nb = b.slice(); nb[i] = 2;
+      const s = winnerOf(nb) ? 10 : solve(nb);
+      if (s > best.score) best = { score: s, i };
+    }
+    return { i: best.i };
+  }
+
+  /* ================= 联机 adapter ================= */
+  const ADAPTER = {
+    seatCount: () => 2,
+    initGame: () => { reset(); },
+    state: () => snap(),
+    loadState: s => load(s),
+    applyMove: mv => place(mv.i),
+    turnSeat: () => G.turn - 1,
+    describeMove: (mv, seat) => (seat === 0 ? "X" : "O") + " 落第 " + (mv.i + 1) + " 格",
+    onControl: ctl => { if (ctl && ctl.t === "reset") { reset(); return true; } return false; },
+    describeControl: () => "重新开局"
+  };
+  const net = BoardNet.create({ namespace: "tictactoe/v1/", adapter: ADAPTER, maxLen: 10, clientPrefix: "tt" });
+
+  /* ================= 界面 ================= */
+  const ui = { mode: "menu", vsAI: true, name: "", score: { x: 0, o: 0, d: 0 } };
+  const root = document.getElementById("root");
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function flash(m) { const el = document.getElementById("flash"); if (!el) return; el.textContent = m; el.classList.add("show"); clearTimeout(flash._t); flash._t = setTimeout(() => el.classList.remove("show"), 2200); }
+  const linkFor = code => location.origin + location.pathname + "#r=" + code;
+  const MARKS = { 1: "✕", 2: "◯" };
+  const NAMES = { 1: "X", 2: "O" };
+
+  function boardHTML(myMark) {
+    let s = "";
+    for (let i = 0; i < 9; i++) {
+      const v = G.b[i];
+      const cls = v === 1 ? "x" : v === 2 ? "o" : "";
+      const win = G.line && G.line.includes(i) ? "win" : "";
+      s += `<div class="sq ${cls} ${win} ${v ? "taken" : ""}" data-i="${i}">${v ? MARKS[v] : ""}</div>`;
+    }
+    return `<div id="board">${s}</div>`;
+  }
+  function localStatusHTML() {
+    if (G.over) {
+      if (G.win === 1) return `<span class="pill on">${ui.vsAI ? "你赢了" : "X 赢"}</span>`;
+      if (G.win === 2) return `<span class="pill">${ui.vsAI ? "AI 赢" : "O 赢"}</span>`;
+      return `<span class="pill">和棋</span>`;
+    }
+    return ui.vsAI
+      ? (G.turn === 1 ? `<span class="pill on">轮到你（X）</span>` : `<span class="pill">AI 思考…</span>`)
+      : `<span class="pill ${G.turn === 1 ? "on" : ""}">轮到 ${NAMES[G.turn]}</span>`;
+  }
+
+  function renderMenu() {
+    root.innerHTML = `
+      <div class="card">
+        <h1>井字棋</h1>
+        <p class="sub">3×3 棋盘，横、竖、斜连成三个就赢；先手 X。单机 AI 用完全搜索，一步都不让。</p>
+        <div class="row">
+          <button class="primary" id="ai">单机对 AI</button>
+          <button id="hot">双人同屏</button>
+        </div>
+        <div class="score" style="margin-top:9px">战绩　你 <b>${ui.score.x}</b> · 平 <b>${ui.score.d}</b> · AI <b>${ui.score.o}</b></div>
+      </div>
+      <div class="card">
+        <h3>联机对弈</h3>
+        <div class="row"><input type="text" id="nm" placeholder="你的昵称" maxlength="10" style="flex:1" value="${esc(ui.name)}"></div>
+        <div class="row" style="margin-top:9px">
+          <button class="primary" id="cr">创建房间</button>
+          <input type="text" id="rc" placeholder="房号" maxlength="4" style="width:96px;text-transform:uppercase">
+          <button id="jn">加入</button>
+        </div>
+        <p class="msg" style="margin-top:9px">房主执 X 先行；房主掉线后房间内另一个浏览器自动接手。</p>
+      </div>`;
+    document.getElementById("ai").onclick = () => { reset(); ui.vsAI = true; ui.mode = "local"; render(); };
+    document.getElementById("hot").onclick = () => { reset(); ui.vsAI = false; ui.mode = "local"; render(); };
+    document.getElementById("cr").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "房主";
+      ui.mode = "online"; net.start("host", net.newRoom(), ui.name); render();
+    };
+    document.getElementById("jn").onclick = () => {
+      ui.name = (document.getElementById("nm").value || "").trim() || "玩家";
+      const rc = (document.getElementById("rc").value || "").trim().toUpperCase();
+      if (rc.length < 3) { flash("房号不对"); return; }
+      ui.mode = "online"; net.start("guest", rc, ui.name); render();
+    };
+  }
+
+  function tally() {
+    if (!G.over) return;
+    if (G.win === 1) ui.score.x++; else if (G.win === 2) ui.score.o++; else ui.score.d++;
+  }
+
+  function renderLocal() {
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">${ui.vsAI ? "单机对 AI（你执 X）" : "双人同屏"}</span>
+          <button class="ghost" id="back">回菜单</button>
+        </div>
+        <div class="status" style="margin-top:10px">${localStatusHTML()}</div>
+        <div class="score">你 <b>${ui.score.x}</b> · 平 <b>${ui.score.d}</b> · ${ui.vsAI ? "AI" : "对手"} <b>${ui.score.o}</b></div>
+        ${boardHTML()}
+        <div class="row" style="margin-top:6px">
+          <button class="primary" id="rs">再来一局</button>
+          <button class="ghost" id="cl">清零战绩</button>
+        </div>
+        <div class="sep"></div>
+        <div class="msg">单机模式下 AI 永远不犯错：最多打成平手，赢不了是正常的。</div>
+      </div>`;
+    document.getElementById("back").onclick = () => { ui.mode = "menu"; render(); };
+    document.getElementById("rs").onclick = () => { reset(); render(); };
+    document.getElementById("cl").onclick = () => { ui.score = { x: 0, o: 0, d: 0 }; reset(); render(); };
+    document.getElementById("board").addEventListener("click", ev => {
+      const sq = ev.target.closest(".sq"); if (!sq) return;
+      if (G.over) { flash("这一局已结束"); return; }
+      if (ui.vsAI && G.turn !== 1) return;
+      if (!place(Number(sq.dataset.i))) return;
+      if (G.over) tally();
+      render();
+      if (ui.vsAI && !G.over) setTimeout(() => {
+        const mv = bestMove(); if (mv.i >= 0) place(mv.i);
+        if (G.over) tally();
+        render();
+      }, 260);
+    });
+  }
+
+  function renderOnline() {
+    const NET = net.net, HOST = net.host, isHost = net.isHost();
+    const seats = isHost ? HOST.seats : NET.seats;
+    const inGame = isHost ? HOST.state !== null : NET.state !== null;
+    const mySide = isHost ? 0 : NET.seatIdx;
+
+    if (!inGame) {
+      const code = NET.room || "-";
+      root.innerHTML = `
+        <div class="card">
+          <h1>房间 ${esc(code)}</h1>
+          <div class="row" style="margin:6px 0 9px">
+            <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "已连中继" : "连接中…"}</span>
+            <span class="pill ${isHost ? "on" : ""}">${isHost ? "房主（X）" : "挑战者"}</span>
+          </div>
+          <div class="row"><input type="text" id="lnk" readonly value="${esc(linkFor(code))}" style="flex:1;font-size:12px"><button id="cp">复制</button></div>
+          <div class="sep"></div><h3>座位</h3>
+          <div class="grid2">
+            <div class="pl ${isHost ? "me" : ""}"><span class="nm">${esc((seats[0] && seats[0].name) || "空位")}</span><span class="pill">X</span></div>
+            <div class="pl ${!isHost && NET.seatIdx === 1 ? "me" : ""}"><span class="nm">${esc((seats[1] && seats[1].name) || "空位")}</span><span class="pill">O</span></div>
+          </div>
+          <div class="sep"></div>
+          <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+          <div class="row"><input type="text" id="ci" placeholder="发条消息…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+          <div class="row" style="margin-top:11px">
+            ${isHost ? `<button class="primary" id="sg">开始对局</button>` : `<span class="msg">等房主开局…</span>`}
+            <button class="ghost" id="lv">离开</button>
+          </div>
+        </div>`;
+      const cp = document.getElementById("cp"); if (cp) cp.onclick = () => net.copyLink(linkFor(code));
+      const sg = document.getElementById("sg"); if (sg) sg.onclick = () => net.startGame();
+      document.getElementById("cs").onclick = () => { net.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+      document.getElementById("lv").onclick = () => { net.leave(); ui.mode = "menu"; render(); };
+      return;
+    }
+
+    const status = G.over
+      ? (G.win === 1 ? "X 赢" : G.win === 2 ? "O 赢" : "和棋")
+      : (G.turn === 1 ? "轮到 X" : "轮到 O");
+    root.innerHTML = `
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <span class="pill">${mySide === 0 ? "你执 X" : (mySide === 1 ? "你执 O" : "观战")}</span>
+          <span class="pill ${NET.connected ? "on" : ""}">${NET.connected ? "在线" : "重连中"}</span>
+        </div>
+        <div class="status" style="margin-top:9px">${status}${!G.over && mySide >= 0 && G.turn === mySide + 1 ? " · 该你了" : ""}</div>
+        ${boardHTML()}
+        <div class="row" style="margin-top:6px">
+          <button class="ghost" id="rs">重新开局</button>
+          <button class="ghost" id="lv">离开</button>
+        </div>
+        <div class="sep"></div>
+        <div class="chat">${(NET.chat || []).map(c => c.sys ? `<div class="sys">${esc(c.text)}</div>` : `<div><span class="who">${esc(c.name)}</span>${esc(c.text)}</div>`).join("")}</div>
+        <div class="row"><input type="text" id="ci" placeholder="边下边聊…" maxlength="80" style="flex:1"><button id="cs">发送</button></div>
+      </div>`;
+    document.getElementById("board").addEventListener("click", ev => {
+      const sq = ev.target.closest(".sq"); if (!sq) return;
+      if (G.over) { flash("这一局已结束"); return; }
+      if (mySide < 0) { flash("你在观战"); return; }
+      if (G.turn !== mySide + 1) { flash("现在不是你的回合"); return; }
+      if (G.b[Number(sq.dataset.i)]) { flash("这格已经有子了"); return; }
+      net.sendMove({ i: Number(sq.dataset.i) });
+    });
+    document.getElementById("rs").onclick = () => net.sendControl({ t: "reset" });
+    document.getElementById("lv").onclick = () => { net.leave(); ui.mode = "menu"; render(); };
+    document.getElementById("cs").onclick = () => { net.sendChat(document.getElementById("ci").value); document.getElementById("ci").value = ""; };
+  }
+
+  function render() {
+    if (ui.mode === "online") return renderOnline();
+    if (ui.mode === "local") return renderLocal();
+    renderMenu();
+  }
+  net.setRender(() => { if (ui.mode === "online") renderOnline(); });
+
+  (function boot() {
+    reset();
+    const m = (location.hash || "").match(/#r=([A-Z0-9]{3,6})/i);
+    if (m) { ui.mode = "online"; net.start("guest", m[1].toUpperCase(), "玩家" + Math.floor(Math.random() * 90 + 10)); render(); return; }
+    renderMenu();
+  })();
+})();
+</script>
+</body>
+</html>
